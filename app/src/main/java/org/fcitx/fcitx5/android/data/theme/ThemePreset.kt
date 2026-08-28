@@ -6,6 +6,64 @@ package org.fcitx.fcitx5.android.data.theme
 
 object ThemePreset {
 
+    /**
+     * iOS-like light keyboard: gray tray, white letter keys, gray modifiers, blue return.
+     */
+    val AppleLight = Theme.Builtin(
+        name = "AppleLight",
+        isDark = false,
+        backgroundColor = 0xffd1d5db,
+        barColor = 0xffd1d5db,
+        keyboardColor = 0xffd1d5db,
+        keyBackgroundColor = 0xffffffff,
+        keyTextColor = 0xff000000,
+        candidateTextColor = 0xff000000,
+        candidateLabelColor = 0xff3c3c43,
+        candidateCommentColor = 0xff8e8e93,
+        altKeyBackgroundColor = 0xffadb3bc,
+        altKeyTextColor = 0xff3a3a3c,
+        accentKeyBackgroundColor = 0xff007aff,
+        accentKeyTextColor = 0xffffffff,
+        keyPressHighlightColor = 0x1a000000,
+        keyShadowColor = 0x33000000,
+        popupBackgroundColor = 0xffffffff,
+        popupTextColor = 0xff000000,
+        spaceBarColor = 0xffffffff,
+        dividerColor = 0x14000000,
+        clipboardEntryColor = 0xffffffff,
+        genericActiveBackgroundColor = 0xff007aff,
+        genericActiveForegroundColor = 0xffffffff
+    )
+
+    /**
+     * iOS-like dark keyboard.
+     */
+    val AppleDark = Theme.Builtin(
+        name = "AppleDark",
+        isDark = true,
+        backgroundColor = 0xff000000,
+        barColor = 0xff000000,
+        keyboardColor = 0xff000000,
+        keyBackgroundColor = 0xff2c2c2e,
+        keyTextColor = 0xffffffff,
+        candidateTextColor = 0xffffffff,
+        candidateLabelColor = 0xffebebf5,
+        candidateCommentColor = 0xff8e8e93,
+        altKeyBackgroundColor = 0xff3a3a3c,
+        altKeyTextColor = 0xffebebf5,
+        accentKeyBackgroundColor = 0xff0a84ff,
+        accentKeyTextColor = 0xffffffff,
+        keyPressHighlightColor = 0x33ffffff,
+        keyShadowColor = 0x66000000,
+        popupBackgroundColor = 0xff2c2c2e,
+        popupTextColor = 0xffffffff,
+        spaceBarColor = 0xff2c2c2e,
+        dividerColor = 0x1fffffff,
+        clipboardEntryColor = 0xff2c2c2e,
+        genericActiveBackgroundColor = 0xff0a84ff,
+        genericActiveForegroundColor = 0xffffffff
+    )
+
     val MaterialLight = Theme.Builtin(
         name = "MaterialLight",
         isDark = false,

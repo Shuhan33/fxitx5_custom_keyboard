@@ -4,8 +4,10 @@
  */
 package org.fcitx.fcitx5.android.input.config
 
+import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.utils.appContext
 import java.io.File
+import java.io.IOException
 
 object UserConfigFiles {
     const val DEFAULT_TEXT_KEYBOARD_LAYOUT_PROFILE = "default"
@@ -101,4 +103,25 @@ object UserConfigFiles {
      * Replaces separate KawaiiBarButtonsLayout.json and StatusAreaButtonsLayout.json files.
      */
     fun buttonsLayoutConfig(): File? = configDir()?.let { File(it, "ButtonsLayout.json") }
+
+    /**
+     * Copy bundled keyboard layout and popup presets into the user config dir
+     * when those files do not exist yet, so first launch matches the Apple layout.
+     */
+    fun seedBundledDefaultsIfMissing() {
+        copyRawIfMissing(R.raw.text_keyboard_layout, textKeyboardLayoutJson())
+        copyRawIfMissing(R.raw.popup_preset, popupPresetJson())
+    }
+
+    private fun copyRawIfMissing(rawRes: Int, target: File?) {
+        if (target == null || target.exists()) return
+        runCatching {
+            target.parentFile?.mkdirs()
+            appContext.resources.openRawResource(rawRes).use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        }.onFailure { error ->
+            if (error !is IOException) throw error
+        }
+    }
 }
