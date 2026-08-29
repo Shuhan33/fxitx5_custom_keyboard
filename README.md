@@ -23,9 +23,10 @@
 - 跟随系统深色／浅色模式，使用简洁的圆角 Apple 风格主题。
 - 拼音词库、用户历史和联想均可离线工作。
 
-<img width="558" height="429" alt="image" src="https://github.com/user-attachments/assets/72c73e78-465f-4762-acc5-99ae315ba709" />
+<img width="400" height="307.5" alt="image" src="https://github.com/user-attachments/assets/72c73e78-465f-4762-acc5-99ae315ba709" />
 
-<img width="398" height="300" alt="image" src="https://github.com/user-attachments/assets/376fc404-f203-4c8d-a563-531ecde10247" />
+
+<img width="400" height="301" alt="image" src="https://github.com/user-attachments/assets/376fc404-f203-4c8d-a563-531ecde10247" />
 
 ## 键盘布局
 
