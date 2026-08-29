@@ -6,6 +6,7 @@ package org.fcitx.fcitx5.android.data.pinyin
 
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.data.DataManager
+import org.fcitx.fcitx5.android.data.CacheManager
 import org.fcitx.fcitx5.android.data.pinyin.dict.BuiltinDictionary
 import org.fcitx.fcitx5.android.data.pinyin.dict.LibIMEDictionary
 import org.fcitx.fcitx5.android.data.pinyin.dict.PinyinDictionary
@@ -66,13 +67,14 @@ object PinyinDictManager {
     }
 
     fun importFromInputStream(stream: InputStream, name: String): Result<LibIMEDictionary> {
-        val tempFile = File(appContext.cacheDir, name)
-        tempFile.outputStream().use {
-            stream.copyTo(it)
+        val dir = File(CacheManager.transientRoot(), "dictionary-import").apply { mkdirs() }
+        val tempFile = File(dir, name)
+        return try {
+            tempFile.outputStream().use { stream.copyTo(it) }
+            importFromFile(tempFile)
+        } finally {
+            tempFile.delete()
         }
-        val new = importFromFile(tempFile)
-        tempFile.delete()
-        return new
     }
 
     fun sougouDictConv(src: String, dest: String) {

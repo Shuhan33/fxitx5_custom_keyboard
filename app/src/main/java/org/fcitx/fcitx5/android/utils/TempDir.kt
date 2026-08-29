@@ -5,10 +5,11 @@
 
 package org.fcitx.fcitx5.android.utils
 
+import org.fcitx.fcitx5.android.data.CacheManager
 import java.io.File
 
 inline fun <T> withTempDir(block: (File) -> T): T {
-    val dir = appContext.cacheDir.resolve(System.currentTimeMillis().toString()).also {
+    val dir = CacheManager.transientRoot().resolve(System.currentTimeMillis().toString()).also {
         it.mkdirs()
     }
     try {

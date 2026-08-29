@@ -27,6 +27,7 @@ import kotlinx.coroutines.plus
 import org.fcitx.fcitx5.android.core.data.DataManager
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
+import org.fcitx.fcitx5.android.data.CacheManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.input.config.UserConfigFiles
@@ -34,6 +35,7 @@ import org.fcitx.fcitx5.android.data.prefs.SmartDefaultInitializer
 import org.fcitx.fcitx5.android.data.prefs.SplitKeyboardStateManager
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.font.FontProviders
+import org.fcitx.fcitx5.android.input.clipboard.ClipboardAdapter
 import org.fcitx.fcitx5.android.ui.main.LogActivity
 import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.Locales
@@ -203,6 +205,7 @@ class FcitxApplication : Application() {
         // Start custom font I/O while the IME daemon is initializing so first view creation can
         // reuse the cached typefaces instead of doing all file work on the main thread.
         FontProviders.preloadFontsAsync()
+        coroutineScope.launch { CacheManager.trimTransientCaches() }
         Locales.onLocaleChange(resources.configuration)
         registerReceiver(shutdownReceiver, IntentFilter(Intent.ACTION_SHUTDOWN))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isDirectBootMode) {
@@ -241,6 +244,20 @@ class FcitxApplication : Application() {
         super.onConfigurationChanged(newConfig)
         ThemeManager.onSystemPlatteChange(newConfig)
         Locales.onLocaleChange(newConfig)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        ClipboardAdapter.trimMemory(level)
+        if (level > 0) {
+            FontProviders.clearCache()
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        ClipboardAdapter.trimMemory(Int.MAX_VALUE)
+        FontProviders.clearCache()
     }
 
     companion object {

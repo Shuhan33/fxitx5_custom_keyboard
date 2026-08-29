@@ -17,8 +17,8 @@ object Versions {
     const val defaultBuildTools = "36.1.0"
 
     // NOTE: increase this value to bump version code
-    const val baseVersionCode = 100
-    const val baseVersionName = "1.0.0"
+    const val baseVersionCode = 101
+    const val baseVersionName = "1.0.1"
 
     val supportedABIs = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
     const val fallbackABI = "arm64-v8a"

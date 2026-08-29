@@ -11,7 +11,7 @@ import java.io.IOException
 
 object UserConfigFiles {
     const val DEFAULT_TEXT_KEYBOARD_LAYOUT_PROFILE = "default"
-    private const val SLEI_CUSTOM_REV = 8
+    private const val SLEI_CUSTOM_REV = 9
     private const val TEXT_KEYBOARD_LAYOUT_DEFAULT_FILE_NAME = "TextKeyboardLayout.json"
     private const val TEXT_KEYBOARD_LAYOUT_PREFIX = "TextKeyboardLayout."
     private const val JSON_SUFFIX = ".json"
@@ -125,8 +125,10 @@ object UserConfigFiles {
         runCatching {
             revFile.parentFile?.mkdirs()
             migrateBottomRowKeys()
+            migrateVSwipeHint()
             injectEmojiToolbarButtonIfMissing()
             patchPinyinEngineDefaults()
+            mergeCommonPronunciationAliases()
             mergeKanaPopupPreset()
             seedDefaultImProfile()
             revFile.writeText(SLEI_CUSTOM_REV.toString())
@@ -143,6 +145,49 @@ object UserConfigFiles {
             .replace(Regex("""\s*,\s*\{"type":\s*"EnglishSpellToggleKey"[^}]*\}"""), "")
             .replace(Regex("""\{"type":\s*"EnglishSpellToggleKey"[^}]*\}\s*,\s*"""), "")
         if (updated != original) file.writeText(updated)
+    }
+
+    /**
+     * Old installations keep their seeded layout forever. Revision 9 repairs the
+     * visible V swipe hint without replacing any other user layout customization.
+     */
+    private fun migrateVSwipeHint() {
+        val file = textKeyboardLayoutJson() ?: return
+        if (!file.exists()) return
+        val original = file.readText()
+        val vKey = Regex(
+            """(\{[^{}]*\"type\"\s*:\s*\"AlphabetKey\"[^{}]*\"main\"\s*:\s*\"[Vv]\"[^{}]*\"alt\"\s*:\s*\")[\-–—−](\"[^{}]*\})"""
+        )
+        val updated = original.replace(vKey, "$1_$2")
+        if (updated != original) file.writeText(updated)
+    }
+
+    /**
+     * Small, context-specific aliases for common pronunciation mistakes. They are
+     * deliberately exact phrase mappings instead of a global mo/mu fuzzy rule,
+     * which would add noisy candidates to unrelated syllables. Existing user
+     * custom phrases always win and are never overwritten.
+     */
+    private fun mergeCommonPronunciationAliases() {
+        val file = externalFilesRoot()?.let { File(it, "data/pinyin/customphrase") } ?: return
+        file.parentFile?.mkdirs()
+        val original = if (file.exists()) file.readText() else ""
+        val existingKeys = original.lineSequence()
+            .mapNotNull { line -> line.substringBefore(',').trim().takeIf { it.matches(Regex("[A-Za-z]+")) } }
+            .map(String::lowercase)
+            .toHashSet()
+        val aliases = linkedMapOf(
+            // Full pinyin and Xiaohe Shuangpin spellings for “mo ban”.
+            "moban" to "模板",
+            "mobj" to "模板"
+        )
+        val additions = aliases.filterKeys { it !in existingKeys }
+        if (additions.isEmpty()) return
+        file.appendText(buildString {
+            if (original.isNotEmpty() && !original.endsWith('\n')) append('\n')
+            append("; slei 1.0.1 common pronunciation aliases\n")
+            additions.forEach { (key, phrase) -> append(key).append(",3=").append(phrase).append('\n') }
+        })
     }
 
     fun syncHistoryWeightPercent(percent: Int) {

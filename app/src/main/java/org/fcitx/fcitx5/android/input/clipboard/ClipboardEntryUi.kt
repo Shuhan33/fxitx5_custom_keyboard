@@ -73,8 +73,16 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
     val pin = imageView {
         imageDrawable = drawable(R.drawable.ic_baseline_push_pin_24)!!.apply {
             setTint(theme.altKeyTextColor)
-            setAlpha(0.3f)
         }
+        contentDescription = ctx.getString(R.string.add_to_favorites)
+        isClickable = true
+        isFocusable = true
+        setPaddingDp(6, 6, 6, 6)
+        background = RippleDrawable(
+            ColorStateList.valueOf(theme.keyPressHighlightColor),
+            null,
+            GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
+        )
     }
 
     val layout = constraintLayout {
@@ -87,7 +95,7 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
         add(textView, lParams(matchParent, wrapContent) {
             centerVertically()
         })
-        add(pin, lParams(dp(12), dp(12)) {
+        add(pin, lParams(dp(28), dp(28)) {
             bottomOfParent(dp(2))
             endOfParent(dp(2))
         })
@@ -112,7 +120,11 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
 
     fun setEntry(text: String, pinned: Boolean, previewBitmap: Bitmap? = null) {
         textView.text = text
-        pin.visibility = if (pinned) View.VISIBLE else View.GONE
+        pin.visibility = View.VISIBLE
+        pin.alpha = if (pinned) 1f else 0.38f
+        pin.contentDescription = ctx.getString(
+            if (pinned) R.string.remove_from_favorites else R.string.add_to_favorites
+        )
         if (previewBitmap != null) {
             preview.setImageBitmap(previewBitmap)
             preview.visibility = View.VISIBLE

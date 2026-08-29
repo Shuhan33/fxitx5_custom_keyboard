@@ -39,8 +39,17 @@ abstract class ClipboardAdapter(
 ) : PagingDataAdapter<ClipboardEntry, ClipboardAdapter.ViewHolder>(diffCallback) {
 
     companion object {
-        private val thumbnailCache = object : LruCache<String, Bitmap>(24) {}
+        // Byte-counted cache avoids retaining several large previews merely because
+        // the entry count is small. 8 MiB is ample for keyboard-sized thumbnails.
+        private val thumbnailCache = object : LruCache<String, Bitmap>(8 * 1024) {
+            override fun sizeOf(key: String, value: Bitmap): Int =
+                (value.allocationByteCount / 1024).coerceAtLeast(1)
+        }
         private val cnMainlandMobilePattern = Regex("^1[3-9]\\d{9}$")
+
+        fun trimMemory(level: Int) {
+            if (level > 0) thumbnailCache.evictAll()
+        }
 
         private val diffCallback = object : DiffUtil.ItemCallback<ClipboardEntry>() {
             override fun areItemsTheSame(
@@ -127,6 +136,9 @@ abstract class ClipboardAdapter(
             holder.thumbnailJob?.cancel()
             holder.boundThumbnailKey = thumbnailKey
             setEntry(displayText, entry.pinned, cachedThumbnail)
+            pin.setOnClickListener {
+                if (entry.pinned) onUnpin(entry.id) else onPin(entry.id)
+            }
             if (thumbnailKey != null && cachedThumbnail == null) {
                 holder.thumbnailJob = scope.launch {
                     val bitmap = entry.loadThumbnailBitmap(ctx)
@@ -257,6 +269,7 @@ abstract class ClipboardAdapter(
         holder.thumbnailJob?.cancel()
         holder.thumbnailJob = null
         holder.boundThumbnailKey = null
+        holder.entryUi.pin.setOnClickListener(null)
         super.onViewRecycled(holder)
     }
 

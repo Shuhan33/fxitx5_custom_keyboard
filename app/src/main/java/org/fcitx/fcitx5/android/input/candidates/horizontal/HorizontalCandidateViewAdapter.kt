@@ -73,11 +73,23 @@ open class HorizontalCandidateViewAdapter(val theme: Theme) :
         ) {
             return
         }
+        val previousCandidates = this.candidates
         this.candidates = data
         this.total = total
         this.activeIndex = activeIndex
         this.indexOffset = indexOffset
-        notifyDataSetChanged()
+        if (fontChanged) {
+            notifyDataSetChanged()
+            return
+        }
+        val shared = minOf(previousCandidates.size, data.size)
+        if (shared > 0) notifyItemRangeChanged(0, shared)
+        when {
+            data.size > previousCandidates.size ->
+                notifyItemRangeInserted(previousCandidates.size, data.size - previousCandidates.size)
+            data.size < previousCandidates.size ->
+                notifyItemRangeRemoved(data.size, previousCandidates.size - data.size)
+        }
     }
 
     fun updateActiveIndex(index: Int) {

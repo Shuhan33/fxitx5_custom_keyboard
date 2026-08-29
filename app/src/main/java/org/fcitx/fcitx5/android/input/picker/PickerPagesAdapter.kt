@@ -6,6 +6,7 @@ package org.fcitx.fcitx5.android.input.picker
 
 import android.annotation.SuppressLint
 import android.util.TypedValue
+import android.graphics.Typeface
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
@@ -54,10 +55,13 @@ class PickerPagesAdapter(
 
     private var currentCategory = 1
     private var items: List<String> = emptyList()
+    private var displayItems: List<String> = emptyList()
     private var allowPopup = true
     private var stripWidth = 0
 
     private val recentlyUsed = RecentlyUsed(recentlyUsedFileName, density.pageSize)
+    private var cachedTextSize = FontProviders.getFontSize("key_main_font", density.textSize)
+    private var cachedTypeface: Typeface = FontProviders.resolveTypeface("key_main_font")
 
     private fun buildCategories(data: List<Pair<PickerData.Category, Array<String>>>) {
         data.forEach { (cat, arr) ->
@@ -115,6 +119,7 @@ class PickerPagesAdapter(
         allowPopup = safe != 0
         val source = if (safe == 0) recentlyUsed.items else categoryItems.getOrElse(safe) { emptyList() }
         items = toHorizontalGrid(source, density.rowCount, density.columnCount, density.pageSize)
+        displayItems = if (allowPopup) items.map(policy::transform) else items
         notifyDataSetChanged()
     }
 
@@ -152,7 +157,7 @@ class PickerPagesAdapter(
             applyItemWidth(keyView)
             return
         }
-        val transformed = if (allowPopup) policy.transform(raw) else raw
+        val transformed = displayItems.getOrNull(position).orEmpty()
         keyView.isEnabled = true
         keyView.mainText.text = transformed
         applyItemWidth(keyView)
@@ -197,9 +202,12 @@ class PickerPagesAdapter(
     }
 
     private fun applyFont(keyView: TextKeyView) {
-        val textSize = FontProviders.getFontSize("key_main_font", density.textSize)
-        keyView.mainText.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize)
-        keyView.mainText.setFontTypeFace("key_main_font")
+        if (FontProviders.needsRefresh()) {
+            cachedTextSize = FontProviders.getFontSize("key_main_font", density.textSize)
+            cachedTypeface = FontProviders.resolveTypeface("key_main_font", cachedTypeface)
+        }
+        keyView.mainText.setTextSize(TypedValue.COMPLEX_UNIT_SP, cachedTextSize)
+        if (keyView.mainText.typeface !== cachedTypeface) keyView.mainText.typeface = cachedTypeface
     }
 
     private fun applyItemWidth(keyView: TextKeyView) {

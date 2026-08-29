@@ -67,8 +67,8 @@
     <string name="real_time_logs">实时日志</string>
     <string name="developer">开发者</string>
     <string name="clear_clb_db">清空剪贴板数据库</string>
-    <string name="add_to_favorites">添加到收藏</string>
-    <string name="remove_from_favorites">从收藏移除</string>
+    <string name="add_to_favorites">固定此条目</string>
+    <string name="remove_from_favorites">取消固定</string>
     <string name="delete">删除</string>
     <string name="clipboard">剪贴板</string>
     <string name="keyboard_height">键盘高度</string>
@@ -99,7 +99,7 @@
     <string name="instruction_enable_clipboard_listening">要启用剪贴板管理，请在设置中开启“记录剪贴板历史”。</string>
     <string name="instruction_copy">试着复制些东西</string>
     <string name="clipboard_category_all">全部</string>
-    <string name="clipboard_category_favorites">收藏</string>
+    <string name="clipboard_category_favorites">固定</string>
     <string name="clipboard_category_local">本地</string>
     <string name="clipboard_category_media">媒体</string>
     <string name="clipboard_category_remote">其他设备</string>
