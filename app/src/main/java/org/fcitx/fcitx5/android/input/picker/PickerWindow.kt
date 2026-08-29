@@ -5,11 +5,11 @@
 package org.fcitx.fcitx5.android.input.picker
 
 import androidx.core.content.ContextCompat
-import androidx.transition.Transition
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.widget.ViewPager2
-import org.fcitx.fcitx5.android.data.theme.ThemeManager
+import androidx.transition.Transition
 import org.fcitx.fcitx5.android.data.theme.IconThemeManager
+import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.broadcast.ReturnKeyDrawableComponent
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.fcitx.fcitx5.android.input.font.FontProviders
@@ -59,11 +59,9 @@ class PickerWindow(
     }
 
     private fun refreshIconTheme() {
-        if (!::pickerLayout.isInitialized || !::pickerPagesAdapter.isInitialized) return
+        if (!::pickerLayout.isInitialized) return
         pickerLayout.embeddedKeyboard.refreshIconTheme()
-        (pickerLayout.pager.getChildAt(0) as? RecyclerView)?.let {
-            pickerPagesAdapter.refreshIconTheme(it)
-        }
+        pickerLayout.backspace.reapplyIconThemeOverride()
     }
 
     override fun enterAnimation(lastWindow: InputWindow): Transition? = null
@@ -73,19 +71,14 @@ class PickerWindow(
     private val keyActionListener = KeyActionListener { it, source ->
         when (it) {
             is KeyAction.LayoutSwitchAction -> {
-                // Switch to NumberKeyboard before attaching KeyboardWindow
                 (windowManager.getEssentialWindow(KeyboardWindow) as KeyboardWindow)
                     .switchLayout(it.act, fromUserKey = true)
-                // The real switchLayout (detachCurrentLayout and attachLayout) in KeyboardWindow is postponed,
-                // so we have to postpone attachWindow as well
                 ContextCompat.getMainExecutor(context).execute {
                     windowManager.attachWindow(KeyboardWindow)
                 }
             }
 
             is KeyAction.FcitxKeyAction -> {
-                // we want the behavior of CommitAction (commit the character as-is),
-                // but don't want to include it in recently used list
                 commonKeyActionListener.listener.onKeyAction(KeyAction.CommitAction(it.act), source)
             }
 
@@ -105,12 +98,11 @@ class PickerWindow(
                     if (!popupPreview) return@PopupActionListener
                 }
                 is PopupAction.ShowKeyboardAction -> {
-                    // prevent ViewPager from consuming swipe gesture when popup keyboard shown
-                    pickerLayout.pager.isUserInputEnabled = false
+                    pickerLayout.allowStripScroll = false
+                    pickerLayout.strip.stopScroll()
                 }
                 is PopupAction.DismissAction -> {
-                    // restore ViewPager scrolling
-                    pickerLayout.pager.isUserInputEnabled = true
+                    pickerLayout.allowStripScroll = true
                 }
                 else -> {}
             }
@@ -125,38 +117,29 @@ class PickerWindow(
             theme, keyActionListener, popupActionListener, data,
             density, key.name, bordered, policy
         )
+        backspace.repeatEnabled = true
         tabsUi.apply {
             setTabs(pickerPagesAdapter.getCategoryList())
             setOnTabClickListener { i ->
-                pager.setCurrentItem(pickerPagesAdapter.getRangeOfCategoryIndex(i).first, false)
+                pickerPagesAdapter.showCategory(i)
+                strip.scrollToPosition(0)
+                activateTab(i)
+            }
+            activateTab(1)
+        }
+        strip.apply {
+            layoutManager = GridLayoutManager(context, density.rowCount, RecyclerView.HORIZONTAL, false)
+            adapter = pickerPagesAdapter
+            setHasFixedSize(true)
+            setItemViewCacheSize(density.columnCount * density.rowCount)
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val width = v.width
+                if (width > 0 && pickerPagesAdapter.relayoutIfWidthChanged(width)) {
+                    pickerPagesAdapter.notifyItemRangeChanged(0, pickerPagesAdapter.itemCount)
+                }
             }
         }
-        pager.apply {
-            adapter = pickerPagesAdapter
-            // show first symbol category by default, rather than recently used
-            val range = pickerPagesAdapter.getRangeOfCategoryIndex(1)
-            setCurrentItem(range.first, false)
-            // update initial tab and page manually to avoid
-            // "Adding or removing callbacks during dispatch to callbacks"
-            tabsUi.activateTab(1)
-            paginationUi.updatePageCount(range.run { last - first + 1 })
-            registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-                override fun onPageScrolled(
-                    position: Int,
-                    positionOffset: Float,
-                    positionOffsetPixels: Int
-                ) {
-                    val range = pickerPagesAdapter.getCategoryRangeOfPage(position)
-                    paginationUi.updatePageCount(range.run { last - first + 1 })
-                    paginationUi.updateScrollProgress(position - range.first, positionOffset)
-                }
-
-                override fun onPageSelected(position: Int) {
-                    tabsUi.activateTab(pickerPagesAdapter.getCategoryIndexOfPage(position))
-                    popup.dismissAll()
-                }
-            })
-        }
+        pickerPagesAdapter.showCategory(1)
     }
 
     override fun onCreateBarExtension() = pickerLayout.tabsUi.root
@@ -171,10 +154,8 @@ class PickerWindow(
             it.keyActionListener = keyActionListener
             it.onAttach()
             it.reapplyTextScale()
-            it.requestLayout()
-            it.invalidate()
         }
-        if (FontProviders.needsRefresh()) {
+        if (FontProviders.checkAndClearRefreshFlag()) {
             pickerLayout.embeddedKeyboard.refreshStyle()
             pickerPagesAdapter.notifyDataSetChanged()
         }
@@ -183,6 +164,7 @@ class PickerWindow(
     override fun onDetached() {
         IconThemeManager.removeOnChangedListener(iconThemeListener)
         popup.dismissAll()
+        pickerLayout.allowStripScroll = true
         pickerLayout.embeddedKeyboard.also {
             it.onDetach()
             it.keyActionListener = null

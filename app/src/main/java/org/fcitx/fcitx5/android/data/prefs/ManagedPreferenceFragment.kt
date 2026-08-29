@@ -25,6 +25,8 @@ abstract class ManagedPreferenceFragment(private val preferenceProvider: Managed
         }
     }
 
+    protected open fun includePreferenceUiKey(key: String): Boolean = true
+
     open fun onPreferenceUiCreated(screen: PreferenceScreen) {}
 
     @CallSuper
@@ -32,7 +34,7 @@ abstract class ManagedPreferenceFragment(private val preferenceProvider: Managed
         evaluator.evaluateVisibility()
         preferenceScreen =
             preferenceManager.createPreferenceScreen(preferenceManager.context).also { screen ->
-                preferenceProvider.createUi(screen)
+                preferenceProvider.createUi(screen, ::includePreferenceUiKey)
                 onPreferenceUiCreated(screen)
             }
     }

@@ -147,6 +147,7 @@ class ButtonsCustomizerActivity : AppCompatActivity() {
         ButtonDefinition("cursor_move", R.drawable.ic_cursor_move, R.string.text_editing),
         ButtonDefinition("floating_toggle", R.drawable.ic_floating_toggle_24, R.string.floating_keyboard),
         ButtonDefinition("clipboard", R.drawable.ic_clipboard, R.string.clipboard),
+        ButtonDefinition("emoji", R.drawable.ic_baseline_tag_faces_24, R.string.emoji),
         ButtonDefinition("language_switch", R.drawable.ic_baseline_language_24, R.string.language_switch),
         ButtonDefinition("theme", R.drawable.ic_baseline_palette_24, R.string.theme),
         ButtonDefinition("icon_theme", R.drawable.ic_icon_theme_24, R.string.icon_theme),

@@ -19,7 +19,10 @@ class KeyboardSettingsFragment : PaddingPreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
-            addPreference(R.string.keyboard_category_layout) {
+            addPreference(
+                R.string.keyboard_category_layout,
+                R.string.keyboard_category_layout_summary
+            ) {
                 navigateWithAnim(SettingsRoute.KeyboardGroup(KeyboardGroupFragment.GROUP_LAYOUT))
             }
             addPreference(R.string.keyboard_category_behavior) {

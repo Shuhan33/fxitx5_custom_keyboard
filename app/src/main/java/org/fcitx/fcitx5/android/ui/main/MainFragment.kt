@@ -67,7 +67,7 @@ class MainFragment : PaddingPreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
-            addCategory("Fcitx") {
+            addCategory("输入") {
                 addDestinationPreference(
                     R.string.global_options,
                     R.drawable.ic_baseline_tune_24,
@@ -84,7 +84,7 @@ class MainFragment : PaddingPreferenceFragment() {
                     SettingsRoute.AddonList
                 )
             }
-            addCategory("Android") {
+            addCategory("键盘") {
                 addDestinationPreference(
                     R.string.theme,
                     R.drawable.ic_baseline_palette_24,
@@ -93,11 +93,13 @@ class MainFragment : PaddingPreferenceFragment() {
                 addPreference(R.string.icon_theme, icon = R.drawable.ic_icon_theme_24) {
                     startActivity(Intent(requireContext(), IconThemeListActivity::class.java))
                 }
-                addDestinationPreference(
+                addPreference(
                     R.string.virtual_keyboard,
-                    R.drawable.ic_baseline_keyboard_24,
-                    SettingsRoute.VirtualKeyboard
-                )
+                    R.string.virtual_keyboard_summary,
+                    icon = R.drawable.ic_baseline_keyboard_24
+                ) {
+                    navigateWithAnim(SettingsRoute.VirtualKeyboard)
+                }
                 addDestinationPreference(
                     R.string.candidates_window,
                     R.drawable.ic_baseline_list_alt_24,

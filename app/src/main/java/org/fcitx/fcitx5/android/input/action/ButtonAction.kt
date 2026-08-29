@@ -23,6 +23,7 @@ import org.fcitx.fcitx5.android.input.dialog.AddMoreInputMethodsPrompt
 import org.fcitx.fcitx5.android.input.dialog.InputMethodPickerDialog
 import org.fcitx.fcitx5.android.input.editing.TextEditingWindow
 import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
+import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.status.StatusAreaWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.ui.main.settings.SettingsRoute
@@ -120,6 +121,7 @@ sealed class ButtonAction {
             CursorMoveAction,
             FloatingToggleAction,
             ClipboardAction,
+            EmojiAction,
             LanguageSwitchAction,
             ThemeAction,
             IconThemeAction,
@@ -153,6 +155,7 @@ sealed class ButtonAction {
             CursorMoveAction,
             FloatingToggleAction,
             ClipboardAction,
+            EmojiAction,
             MoreAction
         )
 
@@ -285,6 +288,24 @@ data object ClipboardAction : ButtonAction() {
         onActionComplete: (() -> Unit)?
     ) {
         windowManager.attachWindow(ClipboardWindow())
+    }
+}
+
+data object EmojiAction : ButtonAction() {
+    override val id = "emoji"
+    override val defaultIcon = R.drawable.ic_baseline_tag_faces_24
+    override val defaultLabelRes = R.string.emoji
+    override val iconSlot = "toolbar.emoji"
+
+    override fun execute(
+        context: Context,
+        service: FcitxInputMethodService,
+        fcitx: FcitxConnection,
+        windowManager: InputWindowManager,
+        view: View?,
+        onActionComplete: (() -> Unit)?
+    ) {
+        windowManager.attachWindow(PickerWindow.Key.Emoji)
     }
 }
 

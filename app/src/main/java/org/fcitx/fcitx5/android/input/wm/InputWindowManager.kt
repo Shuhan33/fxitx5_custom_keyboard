@@ -78,6 +78,12 @@ class InputWindowManager : UniqueViewComponent<InputWindowManager, FrameLayout>(
         essentialWindows[window.key] = window to view
     }
 
+    fun precreateEssentialWindow(windowKey: EssentialWindow.Key) {
+        val pair = essentialWindows[windowKey] ?: return
+        if (pair.second != null) return
+        essentialWindows[windowKey] = pair.first to pair.first.onCreateView()
+    }
+
     fun getEssentialWindow(windowKey: EssentialWindow.Key) =
         essentialWindows[windowKey]?.first
             ?: throw IllegalArgumentException("Unable to find essential window associated with $windowKey")

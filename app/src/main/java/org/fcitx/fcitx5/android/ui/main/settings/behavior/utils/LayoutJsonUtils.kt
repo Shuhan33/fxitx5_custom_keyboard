@@ -621,6 +621,7 @@ object LayoutJsonUtils {
             is AlphabetKey -> "AlphabetKey"
             is CapsKey -> "CapsKey"
             is LayoutSwitchKey -> "LayoutSwitchKey"
+            is EnglishSpellToggleKey -> "EnglishSpellToggleKey"
             is CommaKey -> "CommaKey"
             is LanguageKey -> "LanguageKey"
             is SpaceKey -> "SpaceKey"
@@ -858,6 +859,7 @@ object LayoutJsonUtils {
                 shadowColor = key.shadowColor,
                 shadowColorMonet = key.shadowColorMonet
             )
+            "EnglishSpellToggleKey" -> EnglishSpellToggleKey(percentWidth = key.weight ?: 0.1f)
             "CommaKey" -> CommaKey(
                 percentWidth = key.weight ?: 0.1f,
                 variant = KeyDef.Appearance.Variant.Alternative,

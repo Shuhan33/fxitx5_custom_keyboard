@@ -938,6 +938,7 @@ class TextKeyboard(
 
     private val showLangSwitchKey = AppPrefs.getInstance().keyboard.showLangSwitchKey
     private val spaceKeyLabelMode = AppPrefs.getInstance().keyboard.spaceKeyLabelMode
+    private val keepLettersUppercase = AppPrefs.getInstance().keyboard.keepLettersUppercase
 
     @Keep
     private val showLangSwitchKeyListener = ManagedPreference.OnChangeListener<Boolean> { _, _ ->
@@ -948,14 +949,25 @@ class TextKeyboard(
     }
 
     @Keep
+    private val englishSpellListener = ManagedPreference.OnChangeListener<Boolean> { _, _ ->
+        refreshEnglishSpellKey()
+    }
+
+    @Keep
     private val spaceKeyLabelModeListener = ManagedPreference.OnChangeListener<SpaceKeyLabelMode> { _, _ ->
         updateSpaceLabel(TextKeyboard.ime)
     }
 
-    private val keepLettersUppercase by AppPrefs.getInstance().keyboard.keepLettersUppercase
+    private fun refreshEnglishSpellKey() {
+        val on = AppPrefs.getInstance().keyboard.englishSpellCandidates.getValue()
+        findKeyViewById<TextKeyView>(R.id.button_english_spell)?.mainText?.apply {
+            text = "ABC"
+            alpha = if (on) 1f else 0.42f
+        }
+    }
 
     private fun forceUppercaseLetters(): Boolean {
-        if (!keepLettersUppercase) return false
+        if (!keepLettersUppercase.getValue()) return false
         val lang = ime?.languageCode.orEmpty().lowercase()
         return !lang.startsWith("en")
     }
@@ -1347,10 +1359,12 @@ class TextKeyboard(
     }
 
     override fun onAttach() {
+        super.onAttach()
         ensureSpecialKeyViewsInitialized()
         capsState = if (getService()?.isVirtualShiftLockOn() == true) CapsState.Lock else CapsState.None
         updateCapsButtonIcon()
         updateAlphabetKeys()
+        refreshEnglishSpellKey()
     }
 
     protected override fun defaultRowHeightPercent(rowCount: Int): Float =
@@ -1364,12 +1378,15 @@ class TextKeyboard(
         registerKeyboard(this)
         showLangSwitchKey.registerOnChangeListener(showLangSwitchKeyListener)
         spaceKeyLabelMode.registerOnChangeListener(spaceKeyLabelModeListener)
+        AppPrefs.getInstance().keyboard.englishSpellCandidates.registerOnChangeListener(englishSpellListener)
+        refreshEnglishSpellKey()
     }
 
     override fun onDetachedFromWindow() {
         unregisterKeyboard(this)
         showLangSwitchKey.unregisterOnChangeListener(showLangSwitchKeyListener)
         spaceKeyLabelMode.unregisterOnChangeListener(spaceKeyLabelModeListener)
+        AppPrefs.getInstance().keyboard.englishSpellCandidates.unregisterOnChangeListener(englishSpellListener)
         super.onDetachedFromWindow()
     }
 

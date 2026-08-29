@@ -4,7 +4,6 @@
  */
 
 package org.fcitx.fcitx5.android.input.keyboard
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.core.CapabilityFlag
@@ -137,9 +136,16 @@ class CommonKeyActionListener :
                 is SymAction -> service.postFcitxJob {
                     sendKey(action.sym, action.states)
                 }
-                is CommitAction -> service.postFcitxJob {
-                    commitAndReset()
-                    service.lifecycleScope.launch { service.commitText(action.text) }
+                is CommitAction -> {
+                    val composing = !preeditState.isEmpty || horizontalCandidate.adapter.total > 0
+                    if (!composing) {
+                        service.lifecycleScope.launch { service.commitText(action.text) }
+                    } else {
+                        service.postFcitxJob {
+                            commitAndReset()
+                            service.lifecycleScope.launch { service.commitText(action.text) }
+                        }
+                    }
                 }
                 is QuickPhraseAction -> service.postFcitxJob {
                     commitAndReset()
@@ -148,6 +154,9 @@ class CommonKeyActionListener :
                 is UnicodeAction -> service.postFcitxJob {
                     commitAndReset()
                     triggerUnicode()
+                }
+                is KeyAction.ToggleEnglishSpellAction -> {
+                    org.fcitx.fcitx5.android.data.pinyin.EnglishSpellSettings.toggle()
                 }
                 is LangSwitchAction -> {
                     when (langSwitchKeyBehavior) {
@@ -203,15 +212,12 @@ class CommonKeyActionListener :
                     backspaceSwipeState = Stopped
                 }
                 is PickerSwitchAction -> {
-                    // update lastSymbolType only when specified explicitly
                     val key = action.key?.also { k -> lastPickerType = k.name }
                         ?: runCatching { PickerWindow.Key.valueOf(lastPickerType) }.getOrNull()
                         ?: PickerWindow.Key.Emoji
-                    ContextCompat.getMainExecutor(service).execute {
-                        (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)
-                            ?.prepareCompanionKeyboardHeightPercentOverride()
-                        windowManager.attachWindow(key)
-                    }
+                    (windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow)
+                        ?.prepareCompanionKeyboardHeightPercentOverride()
+                    windowManager.attachWindow(key)
                 }
                 is SpaceLongPressAction -> {
                     when (spaceKeyLongPressBehavior) {

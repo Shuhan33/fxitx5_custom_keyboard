@@ -10,9 +10,8 @@ import android.view.inputmethod.EditorInfo
 import android.content.res.Configuration
 import android.graphics.drawable.ShapeDrawable
 import android.graphics.drawable.shapes.RectShape
-import androidx.core.view.updateLayoutParams
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.flexbox.FlexboxLayoutManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -81,6 +80,8 @@ class HorizontalCandidateComponent :
     private var lastRenderedCandidatesSnapshot: List<CandidateWord> = emptyList()
     private var lastRenderedActiveIndex = Int.MIN_VALUE
     private var pendingLegacyCandidateUpdate: Runnable? = null
+    private var prefetchInFlight = false
+    private var prefetchExhaustedForSnapshot = false
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
         // New input session should not inherit paged-candidate flow state from previous one.
@@ -98,36 +99,19 @@ class HorizontalCandidateComponent :
 
     val expandedCandidateOffset = _expandedCandidateOffset.asSharedFlow()
 
-    private fun refreshExpanded(childCount: Int) {
-        val expandedOffset = (adapter.indexOffset + childCount).coerceAtLeast(0)
-        _expandedCandidateOffset.tryEmit(expandedOffset)
-        bar.expandButtonStateMachine.push(
-            ExpandedCandidatesUpdated,
-            ExpandedCandidatesEmpty to (adapter.total >= 0 && adapter.total <= expandedOffset)
-        )
+    companion object {
+        const val HorizontalLimit = 10
     }
 
-    private fun firstRowVisibleSlotCount(totalCandidates: Int): Int {
-        val rv = view
-        val lm = layoutManager
-        val childCnt = lm.childCount
-        if (childCnt <= 0) return 0
-        val rightBound = rv.width - rv.paddingRight
-        var firstRowTop = Int.MIN_VALUE
-        var visible = 0
-        for (i in 0 until childCnt) {
-            val child = lm.getChildAt(i) ?: continue
-            if (firstRowTop == Int.MIN_VALUE) {
-                firstRowTop = child.top
-            }
-            if (child.top != firstRowTop) break
-            if (child.right <= rightBound) {
-                visible++
-            } else {
-                break
-            }
-        }
-        return visible.coerceIn(0, totalCandidates)
+    private fun refreshExpanded(childCount: Int) {
+        val total = adapter.total
+        val loaded = adapter.candidates.size
+        val allLoaded = loaded == 0 || (total >= 0 && total <= HorizontalLimit)
+        _expandedCandidateOffset.tryEmit(loaded.coerceAtMost(HorizontalLimit).coerceAtLeast(0))
+        bar.expandButtonStateMachine.push(
+            ExpandedCandidatesUpdated,
+            ExpandedCandidatesEmpty to allLoaded
+        )
     }
 
     private fun ensureActiveCandidateVisible(
@@ -138,28 +122,30 @@ class HorizontalCandidateComponent :
         if (activeIndex !in originalCandidates.indices) {
             return
         }
-        val visibleCount = firstRowVisibleSlotCount(adapter.candidates.size)
-        if (visibleCount <= 0 || visibleCount >= adapter.candidates.size) {
-            return
-        }
-        val relativeActiveIndex = activeIndex - adapter.indexOffset
-        if (relativeActiveIndex in 0 until visibleCount) {
-            return
-        }
-        val shift = relativeActiveIndex - visibleCount + 1
-        if (shift <= 0) {
-            return
-        }
-        val oldOffset = adapter.indexOffset
-        val newOffset = (oldOffset + shift).coerceAtMost(originalCandidates.lastIndex)
-        if (newOffset == oldOffset) {
-            return
-        }
-        val windowedCandidates = originalCandidates.copyOfRange(newOffset, originalCandidates.size)
-        val windowedActiveIndex = activeIndex - newOffset
-        adapter.updateCandidates(windowedCandidates, total, windowedActiveIndex, newOffset)
-        view.post {
-            ensureActiveCandidateVisible(originalCandidates, total, activeIndex)
+        layoutManager.scrollToPosition(activeIndex)
+    }
+
+    private fun prefetchMoreCandidates(current: Array<CandidateWord>, total: Int) {
+        val loaded = current.size
+        if (loaded == 0 || prefetchInFlight || prefetchExhaustedForSnapshot) return
+        val want = HorizontalLimit
+        if (loaded >= want) return
+        prefetchInFlight = true
+        val snapshot = current.toList()
+        fcitx.launchOnReady { api ->
+            val extra = api.getCandidates(0, want)
+            view.post {
+                prefetchInFlight = false
+                if (extra.isEmpty() || extra.size <= snapshot.size) {
+                    prefetchExhaustedForSnapshot = true
+                    return@post
+                }
+                if (adapter.candidates.toList() != snapshot) return@post
+                val resolvedTotal = if (total >= 0) total else extra.size
+                val capped = extra.copyOfRange(0, extra.size.coerceAtMost(HorizontalLimit))
+                adapter.updateCandidates(capped, resolvedTotal, adapter.activeIndex, 0)
+                refreshExpanded(layoutManager.childCount)
+            }
         }
     }
 
@@ -167,10 +153,7 @@ class HorizontalCandidateComponent :
         object : HorizontalCandidateViewAdapter(theme) {
             override fun onBindViewHolder(holder: CandidateViewHolder, position: Int) {
                 super.onBindViewHolder(holder, position)
-                holder.itemView.updateLayoutParams<FlexboxLayoutManager.LayoutParams> {
-                    minWidth = layoutMinWidth
-                    flexGrow = layoutFlexGrow
-                }
+                holder.itemView.minimumWidth = layoutMinWidth
                 holder.itemView.setOnClickListener {
                     val idx = holder.idx
                     val total = adapter.total
@@ -193,33 +176,10 @@ class HorizontalCandidateComponent :
         }
     }
 
-    val layoutManager: FlexboxLayoutManager by lazy {
-        object : FlexboxLayoutManager(context) {
+    val layoutManager: LinearLayoutManager by lazy {
+        object : LinearLayoutManager(context, HORIZONTAL, false) {
+            override fun canScrollHorizontally() = true
             override fun canScrollVertically() = false
-            override fun canScrollHorizontally() = false
-            override fun onLayoutCompleted(state: RecyclerView.State) {
-                super.onLayoutCompleted(state)
-                val cnt = this.childCount
-                if (secondLayoutPassNeeded) {
-                    if (cnt < adapter.candidates.size) {
-                        // [^2] RecyclerView can't display all candidates
-                        // update LayoutParams in onLayoutCompleted would trigger another
-                        // onLayoutCompleted, skip the second one to avoid infinite loop
-                        if (secondLayoutPassDone) return
-                        secondLayoutPassDone = true
-                        for (i in 0 until cnt) {
-                            getChildAt(i)!!.updateLayoutParams<LayoutParams> {
-                                flexGrow = 1f
-                            }
-                        }
-                    } else {
-                        secondLayoutPassNeeded = false
-                    }
-                }
-                refreshExpanded(cnt)
-            }
-            // no need to override `generate{,Default}LayoutParams`, because HorizontalCandidateViewAdapter
-            // guarantees ViewHolder's layoutParams to be `FlexboxLayoutManager.LayoutParams`
         }
     }
 
@@ -244,9 +204,29 @@ class HorizontalCandidateComponent :
         }.apply {
             id = R.id.candidate_view
             itemAnimator = null
+            overScrollMode = RecyclerView.OVER_SCROLL_IF_CONTENT_SCROLLS
             adapter = this@HorizontalCandidateComponent.adapter
             layoutManager = this@HorizontalCandidateComponent.layoutManager
             addItemDecoration(FlexboxVerticalDecoration(dividerDrawable))
+            addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+                override fun onInterceptTouchEvent(rv: RecyclerView, e: android.view.MotionEvent): Boolean {
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    return false
+                }
+            })
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    val lm = this@HorizontalCandidateComponent.layoutManager
+                    val candAdapter = this@HorizontalCandidateComponent.adapter
+                    refreshExpanded(lm.childCount)
+                    val last = lm.findLastVisibleItemPosition()
+                    if (last >= candAdapter.itemCount - 3) {
+                        prefetchMoreCandidates(candAdapter.candidates, candAdapter.total)
+                    }
+                }
+            })
         }
     }
 
@@ -267,6 +247,7 @@ class HorizontalCandidateComponent :
         lastPagedData = null
         lastRenderedCandidatesSnapshot = emptyList()
         lastRenderedActiveIndex = Int.MIN_VALUE
+        prefetchExhaustedForSnapshot = false
         val candidates = data.candidates
         val total = data.total
         pendingLegacyCandidateUpdate?.let(view::removeCallbacks)
@@ -361,11 +342,20 @@ class HorizontalCandidateComponent :
                 secondLayoutPassNeeded = false
             }
         }
-        adapter.updateCandidates(candidates, total, activeIndex, 0)
+        val capped = if (candidates.size > HorizontalLimit) {
+            candidates.copyOfRange(0, HorizontalLimit)
+        } else {
+            candidates
+        }
+        val cappedActive = if (activeIndex >= HorizontalLimit) -1 else activeIndex
+        adapter.updateCandidates(capped, total, cappedActive, 0)
+        prefetchExhaustedForSnapshot = false
         view.post {
             ensureActiveCandidateVisible(candidates, total, activeIndex)
+            refreshExpanded(layoutManager.childCount)
         }
-        // not sure why empty candidates won't trigger `FlexboxLayoutManager#onLayoutCompleted()`
+        prefetchMoreCandidates(candidates, total)
+        // not sure why empty candidates won't trigger layout completion
         if (candidates.isEmpty()) {
             refreshExpanded(0)
         }

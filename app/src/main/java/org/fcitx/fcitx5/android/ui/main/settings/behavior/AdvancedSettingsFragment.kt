@@ -152,6 +152,10 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
                 exportLauncher.launch("fcitx5-android_${iso8601UTCDateTime(exportTimestamp)}.zip")
             }
         }
+        screen.addPreference(R.string.clear_cache) {
+            org.fcitx.fcitx5.android.data.CacheManager.clearTransientCaches()
+            ctx.toast(R.string.clear_cache_done)
+        }
         screen.addPreference(R.string.import_user_data) {
             AlertDialog.Builder(ctx)
                 .setIconAttribute(android.R.attr.alertDialogIcon)

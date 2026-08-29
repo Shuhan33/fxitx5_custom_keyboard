@@ -1,0 +1,104 @@
+diff --git a/im/pinyin/pinyin.cpp b/im/pinyin/pinyin.cpp
+index 513a8d4..4a16184 100644
+--- a/im/pinyin/pinyin.cpp
++++ b/im/pinyin/pinyin.cpp
+@@ -545,15 +545,37 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
+             selectedLength <= context.cursor()) {
+             auto [hasUpper, engNess] =
+                 englishNess(parsedPy, context.useShuangpin());
+-            if (engNess) {
++            const bool latinInput =
++                !pyBeforeCursor.empty() &&
++                std::all_of(pyBeforeCursor.begin(), pyBeforeCursor.end(),
++                            [](char c) {
++                                unsigned char uc =
++                                    static_cast<unsigned char>(c);
++                                return (uc >= 'a' && uc <= 'z') ||
++                                       (uc >= 'A' && uc <= 'Z') || uc == '\'' ||
++                                       uc == '-';
++                            });
++            if (engNess || latinInput) {
+                 parsedPyCursor -= selectedSentence.length();
+                 parsedPy = parsedPy.substr(
+                     selectedSentence.size(),
+                     parsedPyCursor > selectedSentence.length()
+                         ? parsedPyCursor - selectedSentence.length()
+                         : std::string::npos);
+-                auto results = spell()->call<ISpell::hintWithProvider>(
+-                    "en", SpellProvider::Custom, pyBeforeCursor, engNess);
++                auto results = engNess
++                                   ? spell()->call<ISpell::hintWithProvider>(
++                                         "en", SpellProvider::Custom,
++                                         pyBeforeCursor, engNess)
++                                   : std::vector<std::string>{};
++
++                // Keep the typed latin word itself. Completing "father" can make
++                // pinyin scoring think the input is "done", which used to drop
++                // the English candidate even though "fathe" still showed it.
++                if (latinInput &&
++                    std::find(results.begin(), results.end(), pyBeforeCursor) ==
++                        results.end()) {
++                    results.insert(results.begin(), pyBeforeCursor);
++                }
+ 
+                 // Our hint doesn't work well with mixed case, so, always put a
+                 // word as is.
+@@ -1175,6 +1197,16 @@ void PinyinEngine::populateConfig() {
+                                ? libime::PinyinDictFlag::NoFlag
+                                : libime::PinyinDictFlag::Disabled);
+ 
++    {
++        int percent = *config_.historyWeightPercent;
++        if (percent < 10) {
++            percent = 10;
++        } else if (percent > 90) {
++            percent = 90;
++        }
++        ime_->model()->setHistoryWeight(static_cast<float>(percent) / 100.0F);
++    }
++
+     pyConfig_ = config_;
+ }
+ 
+diff --git a/im/pinyin/pinyin.h b/im/pinyin/pinyin.h
+index 5ace603..9bb207f 100644
+--- a/im/pinyin/pinyin.h
++++ b/im/pinyin/pinyin.h
+@@ -166,7 +166,7 @@ FCITX_CONFIGURATION(
+         ShuangpinProfileEnum,
+         OptionalHideInDescriptionBase<ShuangpinProfileEnumI18NAnnotation>>
+         shuangpinProfile{this, "ShuangpinProfile", _("Shuangpin Profile"),
+-                         ShuangpinProfileEnum::Ziranma};
++                         ShuangpinProfileEnum::Xiaohe};
+     OptionWithAnnotation<bool, OptionalHideInDescription> showShuangpinMode{
+         this, "ShowShuangpinMode", _("Show current shuangpin mode"), true};
+     Option<int, IntConstrain> pageSize{
+@@ -176,7 +176,7 @@ FCITX_CONFIGURATION(
+     Option<bool> symbolsEnabled{this, "SymbolsEnabled",
+                                 _("Show symbol candidates"), true};
+     Option<bool> chaiziEnabled{this, "ChaiziEnabled",
+-                               _("Show Chaizi candidates"), true};
++                               _("Show Chaizi candidates"), !isAndroid()};
+     Option<bool> extBEnabled{
+         this, "ExtBEnabled",
+         _("Enable more Characters after Unicode CJK Extension B"),
+@@ -185,7 +185,7 @@ FCITX_CONFIGURATION(
+         this, "StrokeCandidateEnabled",
+         _("Show stroke candidates when typing with h(一), s(丨), p(丿), n(㇏), "
+           "z(𠃍)"),
+-        true};
++        !isAndroid()};
+     OptionWithAnnotation<bool, OptionalHideInDescription> cloudPinyinEnabled{
+         this, "CloudPinyinEnabled", _("Enable Cloud Pinyin"), false};
+     OptionalHiddenSubConfigOption cloudpinyin{
+@@ -213,6 +213,10 @@ FCITX_CONFIGURATION(
+         this, "PinyinInPreedit", _("Show complete pinyin in preedit"), false};
+     Option<bool> predictionEnabled{this, "Prediction", _("Enable Prediction"),
+                                    isAndroid()};
++    Option<int, IntConstrain, DefaultMarshaller<int>, OptionalHideInDescription>
++        historyWeightPercent{this, "HistoryWeightPercent",
++                             _("User history weight cap"), 45,
++                             IntConstrain(10, 90)};
+     OptionWithAnnotation<bool, ToolTipAnnotation> keepCurrentContext{
+         this,
+         "KeepCurrentContext",

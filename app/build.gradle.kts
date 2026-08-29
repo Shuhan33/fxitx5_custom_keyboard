@@ -10,7 +10,7 @@ plugins {
 }
 
 val packageBase = "org.fcitx.fcitx5.android"
-val appIdBase = packageBase
+val appIdBase = "org.fcitx5.slei.android"
 val appIdFxSuffix = ".fx"
 val flavorFx = "fx"
 val flavorMainline = "mainline"
@@ -205,9 +205,8 @@ fcitxComponent {
     excludeFiles = listOf("cangjie", "erbi", "qxm", "wanfeng").map {
         "usr/share/fcitx5/inputmethod/$it.conf"
     } + listOf(
-        // pinyin language model is shipped by the :plugin:pinyin-lm plugin instead
-        "usr/share/libime/zh_CN.lm",
-        "usr/share/libime/zh_CN.lm.predict",
+        // slei: keep zh_CN.lm in the main APK so candidates rank by frequency
+        // without requiring the separate pinyin-lm plugin.
         // table input methods and dictionaries are shipped by the :plugin:table-data plugin instead
         "usr/share/fcitx5/inputmethod/db.conf",
         "usr/share/fcitx5/inputmethod/wbpy.conf",

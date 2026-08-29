@@ -51,6 +51,29 @@ option(USE_WEBKIT "" OFF)
 option(ENABLE_CLOUDPINYIN "" OFF)
 # prefer OpenCC_DIR rather than fcitx5-chinese-addons/cmake/FindOpenCC.cmake
 set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+
+# slei: English spell + Android pinyin defaults. Idempotent if already applied.
+set(_slei_pinyin_patch "${CMAKE_CURRENT_SOURCE_DIR}/slei-pinyin.patch")
+if(EXISTS "${_slei_pinyin_patch}")
+    execute_process(
+        COMMAND git apply --reverse --check --ignore-whitespace "${_slei_pinyin_patch}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fcitx5-chinese-addons"
+        RESULT_VARIABLE _slei_pinyin_applied
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT _slei_pinyin_applied EQUAL 0)
+        execute_process(
+            COMMAND git apply --ignore-whitespace "${_slei_pinyin_patch}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fcitx5-chinese-addons"
+            RESULT_VARIABLE _slei_pinyin_ok
+            ERROR_VARIABLE _slei_pinyin_err
+        )
+        if(NOT _slei_pinyin_ok EQUAL 0)
+            message(WARNING "slei pinyin patch failed: ${_slei_pinyin_err}")
+        endif()
+    endif()
+endif()
+
 add_subdirectory(fcitx5-chinese-addons)
 # rename to include executable in apk
 set_target_properties(scel2org5 PROPERTIES OUTPUT_NAME libscel2org5.so)

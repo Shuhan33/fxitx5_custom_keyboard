@@ -1,22 +1,57 @@
-# fcitx5-android
+# slei 键盘
 
-[Fcitx5](https://github.com/fcitx/fcitx5) input method framework and engines ported to Android.
+基于 [fcitx5-android](https://github.com/fcitx5-android/fcitx5-android) 的个人定制输入法。本仓库即主线（`main`），不是上游 `.fx` 发行说明。
 
-本mod是基于原仓几乎全程 vibe coding 而成，在原仓上增加了相当若干特性，包名为了方便网友同时使用体验使用改成了`org.fcitx.fcitx5.android.fx`，总体上可以理解成原仓做的超集, 可在[releases](https://github.com/fxliang/fcitx5-android/releases)下面下载体验。
+- 包名：`org.fcitx5.slei.android.fx`
+- 当前版本：`0.2.0`
+- GitHub：https://github.com/Shuhan33/fxitx5_custom_keyboard
+- 许可：LGPL-2.1-or-later（与上游相同）
 
-如果你觉得本项目对你有帮助，欢迎支持我继续vibe改进
+## 这版做了什么
 
-微信赞赏码
-<img width="600" height="600" src="https://github.com/user-attachments/assets/503063b1-4951-4d88-aaa3-463585135233" />
+拼音输入、候选栏、符号页和数字键盘按日常使用改过：
 
-默认通过 `./gradlew :app:assembleDebug` 等常规命令构建的是带 `.fx` 后缀的 fx 变体（包名 `org.fcitx.fcitx5.android.fx`、界面标题携带 `.fx`、APK 文件名体现 `.fx`、主要输出路径为 `app/build/outputs/apk/fx/<buildType>`，数据目录为 `/Android/data/org.fcitx.fcitx5.android.fx/...`）。同时为了兼容常见脚本，构建后会自动同步一份 APK 到 `app/build/outputs/apk/<buildType>`（不含 `fx/` 这一层）。想要生成与主仓命名一致的 mainline 变体时，可加上 `-PincludeMainlineFlavor=true` 并使用对应的 variant，例如：
+- 符号页是横向连续滚动（可以停在两列中间），不是整页翻页
+- 候选栏只横滑前 10 个，其余走下拉展开栏
+- 拼音输入时可以出英文词（例如 `father`）；开关在设置里，默认打开
+- 数字九宫格略收窄；数字键盘高度独立于字母键盘
+- 中文 `V` 上滑是下划线 `_`
 
+安装包每次打完会拷到本机 `Documents/slei-keyboard-apk`，文件名带版本号。
+
+## 版本号
+
+`build-logic/convention/src/main/kotlin/Versions.kt` 里的 `baseVersionName` / `baseVersionCode`。
+
+| 变动 | 怎么加 |
+| --- | --- |
+| 修卡顿、修联想、改文案、调间距 | 补丁 `0.2.0` → `0.2.1` |
+| 一整块交互或功能（本轮这种） | 次版本 `0.2.0` → `0.3.0` |
+| 包名/数据不兼容，或对外稳定版 | 主版本 `1.0.0` |
+
+arm64 的 `versionCode` = `baseVersionCode * 10 + 2`，例如 `0.2.0` 是 `212`。
+
+## 在 Ubuntu 上编译
+
+不要在 Windows 宿主机上编 native。在 Ubuntu 虚拟机里：
+
+```bash
+cd ~/src/fxitx5_custom_keyboard
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export BUILD_ABI=arm64-v8a
+export GRADLE_OPTS=-Xmx3072m
+./gradlew :app:assembleFxRelease
 ```
-./gradlew -PincludeMainlineFlavor=true :app:assembleMainlineDebug
-./gradlew -PincludeMainlineFlavor=true :app:assembleMainlineRelease
-```
 
-mainline 变体会输出无 `.fx` 后缀的包名、应用名、资源以及 APK/日志命名（输出路径为 `app/build/outputs/apk/mainline/<buildType>`，数据目录 `/Android/data/org.fcitx.fcitx5.android/...` 亦跟主仓一致），运行时与 upstream 原仓保持一致；其余构建逻辑与 fx 变体完全相同。
+产物：`app/build/outputs/apk/fx/release/org.fcitx5.slei.android.fx-<version>-arm64-release.apk`
 
+需要 JDK 17、Android SDK 36、NDK `28.0.13004108`、CMake `3.31.6`、extra-cmake-modules、gettext。Submodule 要 `git submodule update --init --recursive`。
 
+## 设置里和键盘上
 
+- **英文联想**：设置 → 键盘 →「英文联想」。键盘底栏不再放这个开关；若自定义布局里加了该键，标签是 `ABC` 而不是「英」。
+- 拼音方案等引擎选项仍在输入法设置里。
+
+## 上游
+
+核心引擎来自 Fcitx5 / fcitx5-android。本仓库只维护 slei 定制，请不要把这里的提交推到 `fxliang/fcitx5-android`。

@@ -161,9 +161,10 @@ abstract class ManagedPreferenceCategory(
         return primary to secondary
     }
 
-    override fun createUi(screen: PreferenceScreen) {
+    override fun createUi(screen: PreferenceScreen, includeKey: (String) -> Boolean) {
         val ctx = screen.context
         managedPreferencesUi.forEach {
+            if (!includeKey(it.key)) return@forEach
             screen.addPreference(it.createUi(ctx).apply {
                 isEnabled = it.isEnabled()
             })

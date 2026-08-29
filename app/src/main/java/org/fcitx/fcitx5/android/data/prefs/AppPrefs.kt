@@ -90,6 +90,15 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val ignoreSystemWindowInsets = switch(
             R.string.ignore_system_window_insets, "ignore_system_window_insets", false
         )
+        val userHistoryWeightPercent = int(
+            R.string.user_history_weight,
+            "user_history_weight_percent",
+            45,
+            10,
+            90,
+            "%",
+            5
+        )
         val allowOriginalPlugins = switch(
             R.string.allow_original_plugins,
             "allow_original_plugins",
@@ -240,6 +249,12 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             switch(R.string.space_swipe_move_cursor, "space_swipe_move_cursor", true)
         val showLangSwitchKey =
             switch(R.string.show_lang_switch_key, "show_lang_switch_key", true)
+        val englishSpellCandidates = switch(
+            R.string.english_spell_candidates,
+            "english_spell_candidates",
+            true,
+            R.string.english_spell_candidates_summary
+        )
         val textKeyboardLayoutProfile = ManagedPreference.PString(
             sharedPreferences,
             "text_keyboard_layout_profile",

@@ -28,6 +28,7 @@ class AboutFragment : PaddingPreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
+            addPreference(R.string.custom_build_brand, R.string.custom_build_brand_summary)
             addPreference(R.string.privacy_policy) {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.privacyPolicyUrl)))
             }
@@ -47,7 +48,7 @@ class AboutFragment : PaddingPreferenceFragment() {
                 isIconSpaceReserved = false
                 currentVersionPreference = Preference(requireContext()).apply {
                     setTitle(R.string.current_version)
-                    summary = Const.versionName
+                    summary = "${Const.customBuildName} · ${Const.versionName}"
                     isSingleLineTitle = false
                     isIconSpaceReserved = false
                     setOnPreferenceClickListener {
@@ -89,12 +90,12 @@ class AboutFragment : PaddingPreferenceFragment() {
                         versionFromAsset ?: latest.tagName
                     )
                 } else {
-                    Const.versionName
+                    "${Const.customBuildName} · ${Const.versionName}"
                 }
                 currentVersionPreference?.summary = summary
             } catch (t: Throwable) {
                 Timber.w(t, "Failed to check latest version on About page")
-                currentVersionPreference?.summary = Const.versionName
+                currentVersionPreference?.summary = "${Const.customBuildName} · ${Const.versionName}"
             }
         }
     }

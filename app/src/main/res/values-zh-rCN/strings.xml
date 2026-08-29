@@ -71,7 +71,9 @@
     <string name="clipboard">剪贴板</string>
     <string name="keyboard_height">键盘高度</string>
     <string name="virtual_keyboard">虚拟键盘</string>
+    <string name="virtual_keyboard_summary">调整键盘高度、边距和分体键盘</string>
     <string name="keyboard_category_layout">布局与尺寸</string>
+    <string name="keyboard_category_layout_summary">键盘高度（竖屏默认 30%）、左右边距、分体键盘</string>
     <string name="keyboard_category_behavior">按键行为</string>
     <string name="keyboard_category_feedback">按键反馈</string>
     <string name="keyboard_category_toolbar">工具栏与候选栏</string>
@@ -285,6 +287,8 @@
     <string name="space_key_label_mode_compact_when_submode">子模式激活时紧凑显示</string>
     <string name="space_key_label_mode_submode_only">仅显示子模式</string>
     <string name="show_lang_switch_key">显示语言切换键</string>
+    <string name="english_spell_candidates">英文联想</string>
+    <string name="english_spell_candidates_summary">拼音输入时在候选栏显示英文单词和建议</string>
     <string name="horizontal_candidate_style">横向候选词样式</string>
     <string name="horizontal_candidate_never_fill">从不填充宽度</string>
     <string name="horizontal_candidate_auto_fill">按需填充宽度</string>
@@ -476,6 +480,13 @@
     <string name="tokenized_clipboard_empty_state">没有可用token</string>
     <string name="tokenized_clipboard_loading">处理中...</string>
     <string name="emoji_and_symbols">表情和符号</string>
+    <string name="emoji">表情</string>
+    <string name="custom_build_brand">slei 定制版</string>
+    <string name="custom_build_brand_summary">个人使用 · 非公开发行 · 保留原作者与 LGPL 许可</string>
+    <string name="clear_cache">清理缓存</string>
+    <string name="clear_cache_done">缓存已清理</string>
+    <string name="user_history_weight">用户词库权重上限</string>
+    <string name="user_history_weight_summary">输入次数越多，该词权重越高（第 1 次约 10%，之后按对数增长，不超过此上限）</string>
     <string name="default_emoji_skin_tone">默认表情肤色</string>
     <string name="emoji_skin_tone_none">无</string>
     <string name="emoji_skin_tone_type_1_2">🏻 浅肤色 (Type-1-2)</string>
@@ -860,4 +871,5 @@
     <string name="icon_theme_import_dialog_title">导入图标主题</string>
     <string name="icon_theme_overwrite_confirm">覆盖已存在的图标主题 \"%s\"？</string>
     <string name="icon_theme_new">新建</string>
+    <string name="icon_theme_no_custom_theme">还没有自定义图标主题</string>
 </resources>

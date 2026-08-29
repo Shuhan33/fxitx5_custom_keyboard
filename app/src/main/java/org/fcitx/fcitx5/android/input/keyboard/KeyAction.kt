@@ -83,6 +83,8 @@ sealed class KeyAction {
 
     data object LangSwitchAction : KeyAction()
 
+    data object ToggleEnglishSpellAction : KeyAction()
+
     data object ShowInputMethodPickerAction : KeyAction()
 
     data class LayoutSwitchAction(val act: String = "") : KeyAction()
