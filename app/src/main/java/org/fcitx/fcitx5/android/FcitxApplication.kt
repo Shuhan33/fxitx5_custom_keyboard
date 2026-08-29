@@ -11,10 +11,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Build
+import android.os.LocaleList
 import android.os.Process
+import androidx.annotation.Keep
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.core.os.LocaleListCompat
 import androidx.preference.PreferenceManager
+import java.util.Locale
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -23,6 +28,7 @@ import org.fcitx.fcitx5.android.core.data.DataManager
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.input.config.UserConfigFiles
 import org.fcitx.fcitx5.android.data.prefs.SmartDefaultInitializer
 import org.fcitx.fcitx5.android.data.prefs.SplitKeyboardStateManager
@@ -42,6 +48,17 @@ class FcitxApplication : Application() {
     val coroutineScope = MainScope() + CoroutineName("FcitxApplication")
     @Volatile
     private var pluginRefreshPending = false
+
+    @Keep
+    private val historyWeightListener = ManagedPreference.OnChangeListener<Int> { _, value ->
+        UserConfigFiles.syncHistoryWeightPercent(value)
+        FcitxDaemon.getFirstConnectionOrNull()?.runIfReady { reloadConfig() }
+    }
+
+    @Keep
+    private val englishSpellListener = ManagedPreference.OnChangeListener<Boolean> { _, value ->
+        org.fcitx.fcitx5.android.data.pinyin.EnglishSpellSettings.persist(value)
+    }
 
     private val shutdownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -110,8 +127,14 @@ class FcitxApplication : Application() {
             applicationContext
         }
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(wrapChineseLocale(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("zh-CN"))
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !userManager.isUserUnlocked) {
             isDirectBootMode = true
             registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
@@ -170,11 +193,22 @@ class FcitxApplication : Application() {
         ThemeManager.init(resources.configuration)
         if (!isDirectBootMode) {
             UserConfigFiles.seedBundledDefaultsIfMissing()
+            val weightPref = AppPrefs.getInstance().advanced.userHistoryWeightPercent
+            UserConfigFiles.syncHistoryWeightPercent(weightPref.getValue())
+            weightPref.registerOnChangeListener(historyWeightListener)
+            val spellPref = AppPrefs.getInstance().keyboard.englishSpellCandidates
+            org.fcitx.fcitx5.android.data.pinyin.EnglishSpellSettings.persist(spellPref.getValue())
+            spellPref.registerOnChangeListener(englishSpellListener)
         }
         // Start custom font I/O while the IME daemon is initializing so first view creation can
         // reuse the cached typefaces instead of doing all file work on the main thread.
         FontProviders.preloadFontsAsync()
         Locales.onLocaleChange(resources.configuration)
+        if (!isDirectBootMode) {
+            coroutineScope.launch {
+                org.fcitx.fcitx5.android.data.pinyin.CorpusDictionarySync.importIfNeeded()
+            }
+        }
         registerReceiver(shutdownReceiver, IntentFilter(Intent.ACTION_SHUTDOWN))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isDirectBootMode) {
             AppPrefs.getInstance().syncToDeviceEncryptedStorage()
@@ -195,6 +229,17 @@ class FcitxApplication : Application() {
             addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         })
+    }
+
+    private fun wrapChineseLocale(base: Context): Context {
+        val locale = Locale.SIMPLIFIED_CHINESE
+        Locale.setDefault(locale)
+        val config = Configuration(base.resources.configuration)
+        config.setLocale(locale)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            config.setLocales(LocaleList(locale))
+        }
+        return base.createConfigurationContext(config)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

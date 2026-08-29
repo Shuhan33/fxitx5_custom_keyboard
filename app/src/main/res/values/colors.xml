@@ -12,5 +12,10 @@
     <color name="update_asset_failed_bg">#14D50000</color>
     <color name="zxing_viewfinder_mask">#55000000</color>
     <color name="zxing_viewfinder_laser">#2196F3</color>
-    <color name="zxing_possible_result_points">#8033B5E5</color>
+    <color name="apple_grouped_bg">#F2F2F7</color>
+    <color name="apple_grouped_bg_night">#000000</color>
+    <color name="apple_label">#000000</color>
+    <color name="apple_label_night">#FFFFFF</color>
+    <color name="apple_blue">#007AFF</color>
+    <color name="apple_separator">#C6C6C8</color>
 </resources>

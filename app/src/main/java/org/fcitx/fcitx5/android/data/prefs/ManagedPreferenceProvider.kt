@@ -24,7 +24,7 @@ abstract class ManagedPreferenceProvider {
     val managedPreferencesUi: List<ManagedPreferenceUi<*>>
         get() = _managedPreferencesUi
 
-    open fun createUi(screen: PreferenceScreen) {
+    open fun createUi(screen: PreferenceScreen, includeKey: (String) -> Boolean = { true }) {
 
     }
 

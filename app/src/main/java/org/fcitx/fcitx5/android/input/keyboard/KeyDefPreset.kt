@@ -110,7 +110,7 @@ class AlphabetKey(
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(character)),
-        Behavior.Swipe(KeyAction.FcitxKeyAction(punctuation))
+        Behavior.Swipe(KeyAction.CommitAction(punctuation))
     ),
     popup ?: arrayOf(
         Popup.AltPreview(character, punctuation),
@@ -257,13 +257,13 @@ class LayoutSwitchKey(
         // PickerWindow symbols or numberkeyboard switch
         arrayOf(
             Popup.Menu.Item(
-                "Symbols",
+                "符号",
                 R.drawable.ic_baseline_emoji_symbols_24,
                 KeyAction.LayoutSwitchAction(PickerWindow.Key.Symbol.name),
                 iconSlot = "keys.symbols"
             ),
             Popup.Menu.Item(
-                "NumPad",
+                "数字",
                 R.drawable.ic_number_pad,
                 KeyAction.LayoutSwitchAction(NumberKeyboard.Name),
                 iconSlot = "keys.numpad"
@@ -366,13 +366,13 @@ class CommaKey(
         Popup.Menu(
             arrayOf(
                 Popup.Menu.Item(
-                    "Emoji",
+                    "表情",
                     R.drawable.ic_baseline_tag_faces_24,
                     KeyAction.PickerSwitchAction(),
                     iconSlot = "keys.emoji"
                 ),
                 Popup.Menu.Item(
-                    "QuickPhrase",
+                    "快捷短语",
                     R.drawable.ic_baseline_format_quote_24,
                     KeyAction.QuickPhraseAction,
                     iconSlot = "keys.quickphrase"
@@ -415,6 +415,23 @@ class LanguageKey(
         Behavior.LongPress(KeyAction.ShowInputMethodPickerAction)
     ),
     iconSlot = "keys.language"
+)
+
+class EnglishSpellToggleKey(
+    percentWidth: Float = 0.1f
+) : KeyDef(
+    Appearance.Text(
+        displayText = "ABC",
+        textSize = 16f,
+        textStyle = Typeface.BOLD,
+        percentWidth = percentWidth,
+        variant = Variant.AltForeground,
+        border = Border.Special,
+        viewId = R.id.button_english_spell
+    ),
+    setOf(
+        Behavior.Press(KeyAction.ToggleEnglishSpellAction)
+    )
 )
 
 class SpaceKey(
@@ -497,7 +514,7 @@ class ReturnKey(
         Popup.Menu(
             arrayOf(
                 Popup.Menu.Item(
-                    "Emoji", R.drawable.ic_baseline_tag_faces_24, KeyAction.PickerSwitchAction(),
+                    "表情", R.drawable.ic_baseline_tag_faces_24, KeyAction.PickerSwitchAction(),
                     iconSlot = "keys.emoji"
                 )
             )

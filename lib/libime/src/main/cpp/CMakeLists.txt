@@ -31,6 +31,28 @@ add_library(PkgConfig::ZSTD ALIAS zstd::libzstd_static)
 
 set(LIBIME_INSTALL_PKGDATADIR table)
 option(ENABLE_TEST "" OFF)
+
+set(_slei_lm_patch "${CMAKE_CURRENT_SOURCE_DIR}/slei-history-weight.patch")
+if(EXISTS "${_slei_lm_patch}")
+    execute_process(
+        COMMAND git apply --reverse --check --ignore-whitespace "${_slei_lm_patch}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/libime"
+        RESULT_VARIABLE _slei_lm_applied
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(NOT _slei_lm_applied EQUAL 0)
+        execute_process(
+            COMMAND git apply --ignore-whitespace "${_slei_lm_patch}"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/libime"
+            RESULT_VARIABLE _slei_lm_ok
+            ERROR_VARIABLE _slei_lm_err
+        )
+        if(NOT _slei_lm_ok EQUAL 0)
+            message(WARNING "slei libime history-weight patch failed: ${_slei_lm_err}")
+        endif()
+    endif()
+endif()
+
 add_subdirectory(libime)
 # kenlm/util/exception.hh uses __FILE__ macro
 target_compile_options(kenlm PRIVATE "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/libime/src/libime/core/kenlm=.")

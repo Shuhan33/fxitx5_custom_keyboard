@@ -647,6 +647,7 @@ class IconThemeEditorActivity : AppCompatActivity() {
         "toolbar.cursor_move" -> R.drawable.ic_cursor_move
         "toolbar.floating_toggle" -> R.drawable.ic_floating_toggle_24
         "toolbar.clipboard" -> R.drawable.ic_clipboard
+        "toolbar.emoji" -> R.drawable.ic_baseline_tag_faces_24
         "toolbar.more" -> R.drawable.ic_baseline_more_horiz_24
         "toolbar.language_switch" -> R.drawable.ic_baseline_language_24
         "toolbar.theme" -> R.drawable.ic_baseline_palette_24

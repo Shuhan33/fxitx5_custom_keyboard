@@ -173,7 +173,15 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         frameScheduled = false
         if (ripples.isEmpty()) return
-        val saveCount = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        if (occludersDirty) {
+            rebuildOccluderSnapshots()
+        }
+        val punchHoles = occluderSnapshots.isNotEmpty()
+        val saveCount = if (punchHoles) {
+            canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        } else {
+            -1
+        }
 
         val now = SystemClock.uptimeMillis()
 
@@ -229,26 +237,24 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
         }
         ripplePaint.shader = null
 
-        if (occludersDirty) {
-            rebuildOccluderSnapshots()
-        }
-        occluderSnapshots.forEach { snapshot ->
-            if (snapshot.roundRect) {
-                canvas.drawRoundRect(
-                    snapshot.left,
-                    snapshot.top,
-                    snapshot.right,
-                    snapshot.bottom,
-                    snapshot.cornerRadius,
-                    snapshot.cornerRadius,
-                    clearPaint
-                )
-            } else {
-                canvas.drawRect(snapshot.left, snapshot.top, snapshot.right, snapshot.bottom, clearPaint)
+        if (punchHoles) {
+            occluderSnapshots.forEach { snapshot ->
+                if (snapshot.roundRect) {
+                    canvas.drawRoundRect(
+                        snapshot.left,
+                        snapshot.top,
+                        snapshot.right,
+                        snapshot.bottom,
+                        snapshot.cornerRadius,
+                        snapshot.cornerRadius,
+                        clearPaint
+                    )
+                } else {
+                    canvas.drawRect(snapshot.left, snapshot.top, snapshot.right, snapshot.bottom, clearPaint)
+                }
             }
+            canvas.restoreToCount(saveCount)
         }
-
-        canvas.restoreToCount(saveCount)
 
         if (ripples.isNotEmpty()) {
             scheduleFrame()

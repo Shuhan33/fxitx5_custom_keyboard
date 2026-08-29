@@ -9,7 +9,6 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.graphics.ColorUtils
 import androidx.core.view.updateLayoutParams
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
@@ -21,7 +20,6 @@ import org.fcitx.fcitx5.android.input.font.FontProviders
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.OnGestureListener
 import org.fcitx.fcitx5.android.input.keyboard.ImageKeyView
-import org.fcitx.fcitx5.android.input.keyboard.KeyboardWaterRippleView
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.CommitAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.FcitxKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.SymAction
@@ -35,7 +33,6 @@ import org.fcitx.fcitx5.android.input.keyboard.KeyView
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyView
 import org.fcitx.fcitx5.android.input.popup.PopupAction
 import org.fcitx.fcitx5.android.input.popup.PopupActionListener
-import splitties.dimensions.dp
 import splitties.views.dsl.constraintlayout.below
 import splitties.views.dsl.constraintlayout.bottomOfParent
 import splitties.views.dsl.constraintlayout.bottomToTopOf
@@ -50,7 +47,6 @@ import splitties.views.dsl.constraintlayout.topToBottomOf
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
 import splitties.views.dsl.core.matchParent
-import kotlin.math.max
 
 class PickerPageUi(
     override val ctx: Context,
@@ -100,8 +96,6 @@ class PickerPageUi(
         }
     }
 
-    private val waterRippleOverlay = KeyboardWaterRippleView(ctx)
-
     private val backspaceAppearance = Appearance.Image(
         src = R.drawable.ic_baseline_backspace_24,
         variant = Variant.Alternative,
@@ -123,13 +117,6 @@ class PickerPageUi(
     }
 
     override val root = constraintLayout {
-        add(waterRippleOverlay, lParams(matchParent, matchParent) {
-            topOfParent()
-            bottomOfParent()
-            leftOfParent()
-            rightOfParent()
-        })
-
         val columnCount = density.columnCount
         val rowCount = density.rowCount
         val keyWidth = 1f / columnCount
@@ -189,16 +176,6 @@ class PickerPageUi(
 
     init {
         applyFontConfig()
-        val occluders = ArrayList<View>(keyViews.size + if (density.showBackspace) 1 else 0)
-        keyViews.forEach { keyView ->
-            bindRipple(keyView)
-            occluders.add(keyView)
-        }
-        if (density.showBackspace) {
-            bindRipple(backspaceKey)
-            occluders.add(backspaceKey)
-        }
-        waterRippleOverlay.setOccluders(occluders)
     }
 
     fun applyFontConfig() {
@@ -215,39 +192,7 @@ class PickerPageUi(
         }
     }
 
-    private fun bindRipple(keyView: KeyView) {
-        keyView.onWaterRippleRequest = { view, _, _ ->
-            val cx = view.x + view.width * 0.5f
-            val cy = view.y + view.height * 0.5f
-            val radius = waterRippleRadiusPx(view)
-            waterRippleOverlay.startRipple(cx, cy, waterRippleColor(), radius)
-        }
-    }
-
-    private fun waterRippleRadiusPx(view: View): Float {
-        val base = minOf(root.width, root.height).takeIf { it > 0 }?.toFloat() ?: ctx.dp(120).toFloat()
-        val minFromKey = max(view.width, view.height) * 1.0f
-        return max(base * 0.20f, minFromKey)
-    }
-
-    private fun waterRippleColor(): Int {
-        theme.waterRippleColor?.let { return it }
-        val shadow = theme.keyShadowColor
-        val background = ColorUtils.setAlphaComponent(theme.keyboardColor, 255)
-        val contrast = ColorUtils.calculateContrast(shadow, background)
-        return if (contrast < 1.35) {
-            ColorUtils.blendARGB(shadow, theme.accentKeyBackgroundColor, 0.72f)
-        } else {
-            ColorUtils.blendARGB(shadow, theme.accentKeyBackgroundColor, 0.28f)
-        }
-    }
-
-    private fun onSymbolClick(str: String) {
-        keyActionListener?.onKeyAction(CommitAction(str), Source.Keyboard)
-    }
-
     fun setItems(items: List<String>) {
-        applyFontConfig()
         keyViews.forEachIndexed { i, keyView ->
             keyView.apply {
                 if (i >= items.size) {
@@ -267,7 +212,6 @@ class PickerPageUi(
     }
 
     fun setItems(items: List<String>, policy: PickerPolicy) {
-        applyFontConfig()
         keyViews.forEachIndexed { i, keyView ->
             keyView.apply {
                 if (i >= items.size) {

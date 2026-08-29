@@ -97,6 +97,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         val keyboard = when (name) {
             TextKeyboard.Name -> TextKeyboard(context, theme)
             NumberKeyboard.Name -> NumberKeyboard(context, theme)
+            JapaneseKanaKeyboard.Name -> JapaneseKanaKeyboard(context, theme)
             else -> return null
         }
         keyboards[name] = keyboard
@@ -282,9 +283,12 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         // onStartInput) must NOT release the manual numeric layout here: the layer latch
         // was applied moments before via applyEffectiveTextLayer and releasing would
         // clobber it back to the session fallback.
-        ContextCompat.getMainExecutor(service).execute {
-            if (target == TextKeyboard.Name || target == NumberKeyboard.Name) {
-                if (target == TextKeyboard.Name) {
+        val isBuiltinKeyboard = target == TextKeyboard.Name ||
+            target == NumberKeyboard.Name ||
+            target == JapaneseKanaKeyboard.Name
+        val apply = apply@{
+            if (isBuiltinKeyboard) {
+                if (target == TextKeyboard.Name || target == NumberKeyboard.Name) {
                     clearCompanionKeyboardHeightOverride()
                 } else if (inheritTextHeight) {
                     prepareCompanionKeyboardHeightPercentOverride()
@@ -310,7 +314,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
                     if (notifyHeightChange) {
                         service.inputView?.onKeyboardHeightSourceChanged()
                     }
-                    return@execute
+                    return@apply
                 }
                 detachCurrentLayout()
                 attachLayout(target)
@@ -321,16 +325,23 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
                     notifyBarLayoutChanged()
                 }
             } else {
+                val pickerKey = runCatching { PickerWindow.Key.valueOf(target) }.getOrNull()
+                    ?: PickerWindow.Key.Symbol
                 if (remember) {
-                    lastSymbolType = PickerWindow.Key.Symbol.name
+                    lastSymbolType = pickerKey.name
                 }
                 if (inheritTextHeight) {
                     prepareCompanionKeyboardHeightPercentOverride()
                 } else {
                     clearCompanionKeyboardHeightOverride()
                 }
-                windowManager.attachWindow(PickerWindow.Key.Symbol)
+                windowManager.attachWindow(pickerKey)
             }
+        }
+        if (isBuiltinKeyboard) {
+            ContextCompat.getMainExecutor(service).execute(apply)
+        } else {
+            apply()
         }
     }
 

@@ -109,13 +109,14 @@ data class ButtonsLayoutConfig(
                 ConfigurableButton("undo"),
                 ConfigurableButton("redo"),
                 ConfigurableButton("cursor_move"),
-                ConfigurableButton("floating_toggle"),
+                ConfigurableButton("emoji"),
                 ConfigurableButton("clipboard")
             ),
             // Note: input_method_options is always added automatically at the end of Status Area
             statusAreaButtons = listOf(
                 ConfigurableButton("theme"),
                 ConfigurableButton("icon_theme"),
+                ConfigurableButton("floating_toggle"),
                 ConfigurableButton("reload_config"),
                 ConfigurableButton("virtual_keyboard"),
                 ConfigurableButton("one_handed_keyboard")
@@ -150,7 +151,7 @@ data class KawaiiBarButtonsConfig(
                 ConfigurableButton("undo"),
                 ConfigurableButton("redo"),
                 ConfigurableButton("cursor_move"),
-                ConfigurableButton("floating_toggle"),
+                ConfigurableButton("emoji"),
                 ConfigurableButton("clipboard")
             )
         )
