@@ -23,6 +23,7 @@ import org.fcitx.fcitx5.android.core.data.DataManager
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.input.config.UserConfigFiles
 import org.fcitx.fcitx5.android.data.prefs.SmartDefaultInitializer
 import org.fcitx.fcitx5.android.data.prefs.SplitKeyboardStateManager
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
@@ -167,6 +168,9 @@ class FcitxApplication : Application() {
         }
         ClipboardManager.init(ctx)
         ThemeManager.init(resources.configuration)
+        if (!isDirectBootMode) {
+            UserConfigFiles.seedBundledDefaultsIfMissing()
+        }
         // Start custom font I/O while the IME daemon is initializing so first view creation can
         // reuse the cached typefaces instead of doing all file work on the main thread.
         FontProviders.preloadFontsAsync()

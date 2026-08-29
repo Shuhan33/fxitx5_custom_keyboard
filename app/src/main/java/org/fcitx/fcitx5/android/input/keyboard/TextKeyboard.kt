@@ -24,6 +24,7 @@ import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.popup.PopupAction
+import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import splitties.views.imageResource
 import kotlinx.serialization.json.*
 import kotlinx.serialization.Serializable
@@ -842,33 +843,34 @@ class TextKeyboard(
                     AlphabetKey("P", "0")
                 ),
                 listOf(
-                    AlphabetKey("A", "@"),
-                    AlphabetKey("S", "*"),
-                    AlphabetKey("D", "+"),
-                    AlphabetKey("F", "-"),
-                    AlphabetKey("G", "="),
-                    AlphabetKey("H", "/"),
-                    AlphabetKey("J", "#"),
+                    AlphabetKey("A", "~"),
+                    AlphabetKey("S", "@"),
+                    AlphabetKey("D", "#"),
+                    AlphabetKey("F", "$"),
+                    AlphabetKey("G", "%"),
+                    AlphabetKey("H", "&"),
+                    AlphabetKey("J", "*"),
                     AlphabetKey("K", "("),
                     AlphabetKey("L", ")")
                 ),
                 listOf(
                     CapsKey(),
                     AlphabetKey("Z", "'"),
-                    AlphabetKey("X", ":"),
-                    AlphabetKey("C", "\""),
-                    AlphabetKey("V", "?"),
-                    AlphabetKey("B", "!"),
-                    AlphabetKey("N", "~"),
-                    AlphabetKey("M", "\\"),
+                    AlphabetKey("X", "/"),
+                    AlphabetKey("C", "-"),
+                    AlphabetKey("V", "_"),
+                    AlphabetKey("B", ":"),
+                    AlphabetKey("N", ";"),
+                    AlphabetKey("M", "`"),
                     BackspaceKey()
                 ),
                 listOf(
-                    LayoutSwitchKey("?123", ""),
-                    CommaKey(0.1f, KeyDef.Appearance.Variant.Alternative),
-                    *if (showLangSwitch) arrayOf(LanguageKey()) else emptyArray(),
+                    LayoutSwitchKey("符号", PickerWindow.Key.Symbol.name, 0.12f),
+                    LayoutSwitchKey("123", NumberKeyboard.Name, 0.12f),
+                    AlphabetKey(",", "!"),
                     SpaceKey(),
-                    SymbolKey(".", 0.1f, KeyDef.Appearance.Variant.Alternative),
+                    AlphabetKey(".", "?"),
+                    *if (showLangSwitch) arrayOf(LanguageKey()) else emptyArray(),
                     ReturnKey()
                 )
             )
@@ -951,6 +953,12 @@ class TextKeyboard(
     }
 
     private val keepLettersUppercase by AppPrefs.getInstance().keyboard.keepLettersUppercase
+
+    private fun forceUppercaseLetters(): Boolean {
+        if (!keepLettersUppercase) return false
+        val lang = ime?.languageCode.orEmpty().lowercase()
+        return !lang.startsWith("en")
+    }
 
     init {
         // BaseKeyboard has already built the initial layout. If the current IME was supplied
@@ -1556,8 +1564,8 @@ class TextKeyboard(
                     && (character[0] in 'A'..'Z' || character[0] in 'a'..'z')
 
                 it.mainText.text = when {
-                    keepLettersUppercase && displayIsSingleLetter -> displayText.uppercase()
-                    keepLettersUppercase -> displayText
+                    forceUppercaseLetters() && displayIsSingleLetter -> displayText.uppercase()
+                    forceUppercaseLetters() -> displayText
                     !displayUppercase && displayIsSingleLetter -> displayText.lowercase()
                     !displayUppercase -> displayText
                     displayIsSingleLetter -> displayText.uppercase()
@@ -1572,7 +1580,7 @@ class TextKeyboard(
                     renderedText
                 }
                 if (str.length == 1 && (str[0] in 'A'..'Z' || str[0] in 'a'..'z')) {
-                     it.mainText.text = if (keepLettersUppercase) {
+                     it.mainText.text = if (forceUppercaseLetters()) {
                         str.uppercase()
                     } else {
                         if (displayUppercase) str.uppercase() else str.lowercase()

@@ -33,6 +33,8 @@ object ThemeManager {
     }
 
     val BuiltinThemes = listOf(
+        ThemePreset.AppleLight,
+        ThemePreset.AppleDark,
         ThemePreset.MaterialLight,
         ThemePreset.MaterialDark,
         ThemePreset.PixelLight,
@@ -44,7 +46,7 @@ object ThemeManager {
         ThemePreset.AMOLEDBlack,
     )
 
-    val DefaultTheme = ThemePreset.PixelDark
+    val DefaultTheme = ThemePreset.AppleLight
 
     private var monetThemes = defaultMonetThemes()
 

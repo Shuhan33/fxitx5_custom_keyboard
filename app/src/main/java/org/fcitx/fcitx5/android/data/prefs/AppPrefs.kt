@@ -201,7 +201,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val keepLettersUppercase = switch(
             R.string.keep_keyboard_letters_uppercase,
             "keep_keyboard_letters_uppercase",
-            false
+            true
         )
 
         val showVoiceInputButton =
@@ -215,7 +215,7 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val swipeSymbolDirection = enumList(
             R.string.swipe_symbol_behavior,
             "swipe_symbol_behavior",
-            SwipeSymbolDirection.Down
+            SwipeSymbolDirection.Up
         )
         val longPressDelay = int(
             R.string.keyboard_long_press_delay,
