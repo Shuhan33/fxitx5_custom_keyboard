@@ -347,10 +347,17 @@ class HorizontalCandidateComponent :
             candidates
         }
         val cappedActive = if (activeIndex >= HorizontalLimit) -1 else activeIndex
+        val candidateContentChanged = !adapter.candidates.contentEquals(capped)
         adapter.updateCandidates(capped, total, cappedActive, 0)
         prefetchExhaustedForSnapshot = false
         view.post {
-            ensureActiveCandidateVisible(capped, cappedActive)
+            if (candidateContentChanged) {
+                // A new composing snapshot must start at candidate 0 instead of
+                // inheriting the horizontal offset from the previous word.
+                layoutManager.scrollToPositionWithOffset(0, 0)
+            } else {
+                ensureActiveCandidateVisible(capped, cappedActive)
+            }
             refreshExpanded()
         }
         prefetchMoreCandidates(candidates, total)

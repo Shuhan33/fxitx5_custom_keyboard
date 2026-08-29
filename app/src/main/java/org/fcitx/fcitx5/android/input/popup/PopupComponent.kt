@@ -57,7 +57,9 @@ class PopupComponent :
         context.dp(38)
     }
     private val popupHeight by lazy {
-        context.dp(116)
+        // Keep the magnified key feedback compact; the previous 116 dp body
+        // extended too far toward the pressed key on phone-sized layouts.
+        context.dp(108)
     }
     private val popupKeyHeight by lazy {
         context.dp(48)

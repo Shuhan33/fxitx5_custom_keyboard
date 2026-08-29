@@ -997,7 +997,13 @@ class TextKeyboard(
 
     private var punctuationMapping: Map<String, String> = mapOf()
     private var lastLayoutSignature: String? = null
-    private fun transformPunctuation(p: String) = punctuationMapping.getOrDefault(p, p)
+    private fun transformPunctuation(p: String): String {
+        // The V swipe is intentionally a literal underscore. Chinese punctuation
+        // maps may otherwise turn it into an em dash, making both the key hint and
+        // popup preview disagree with the configured layout.
+        if (p == "_") return p
+        return punctuationMapping.getOrDefault(p, p)
+    }
 
     private fun selectedLayoutArray(ime: InputMethodEntry): JsonArray? {
         val json = textLayoutJson ?: return null
