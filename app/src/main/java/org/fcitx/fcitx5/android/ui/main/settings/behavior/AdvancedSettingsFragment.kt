@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.daemon.FcitxDaemon
+import org.fcitx.fcitx5.android.data.CacheManager
 import org.fcitx.fcitx5.android.data.UserDataManager
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreferenceFragment
@@ -153,8 +154,10 @@ class AdvancedSettingsFragment : ManagedPreferenceFragment(AppPrefs.getInstance(
             }
         }
         screen.addPreference(R.string.clear_cache) {
-            org.fcitx.fcitx5.android.data.CacheManager.clearTransientCaches()
-            ctx.toast(R.string.clear_cache_done)
+            lifecycleScope.launch {
+                CacheManager.clearTransientCaches()
+                ctx.toast(R.string.clear_cache_done)
+            }
         }
         screen.addPreference(R.string.import_user_data) {
             AlertDialog.Builder(ctx)

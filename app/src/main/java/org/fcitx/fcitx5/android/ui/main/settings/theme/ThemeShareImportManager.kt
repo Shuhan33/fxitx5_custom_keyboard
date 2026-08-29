@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
+import android.os.Build
 import android.view.View
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -422,7 +423,13 @@ class ThemeShareImportManager(
         val encodings = listOf("UTF-8", "GBK", "Big5")
         encodings.forEach { encoding ->
             runCatching {
-                ZipInputStream(ByteArrayInputStream(zipBytes), Charset.forName(encoding)).use { zip ->
+                val input = ByteArrayInputStream(zipBytes)
+                val zipInput = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    ZipInputStream(input, Charset.forName(encoding))
+                } else {
+                    ZipInputStream(input)
+                }
+                zipInput.use { zip ->
                     var entry = zip.nextEntry
                     while (entry != null) {
                         if (!entry.isDirectory && entry.name.endsWith(".json")) {

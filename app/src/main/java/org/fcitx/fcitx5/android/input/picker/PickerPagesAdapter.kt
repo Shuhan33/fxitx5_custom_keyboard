@@ -10,14 +10,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import org.fcitx.fcitx5.android.data.RecentlyUsed
-import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.input.AutoScaleTextView
 import org.fcitx.fcitx5.android.input.font.FontProviders
-import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView
-import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.OnGestureListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.CommitAction
-import org.fcitx.fcitx5.android.input.keyboard.KeyAction.FcitxKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyActionListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyActionListener.Source
 import org.fcitx.fcitx5.android.input.keyboard.KeyDef
@@ -29,6 +25,7 @@ import org.fcitx.fcitx5.android.input.keyboard.TextKeyView
 import org.fcitx.fcitx5.android.input.popup.PopupAction
 import org.fcitx.fcitx5.android.input.popup.PopupActionListener
 import splitties.dimensions.dp
+import kotlin.math.roundToInt
 
 class PickerPagesAdapter(
     val theme: Theme,
@@ -42,8 +39,6 @@ class PickerPagesAdapter(
 ) : RecyclerView.Adapter<PickerPagesAdapter.ViewHolder>() {
 
     class ViewHolder(val keyView: TextKeyView) : RecyclerView.ViewHolder(keyView)
-
-    private val popupOnKeyPress by AppPrefs.getInstance().keyboard.popupOnKeyPress
 
     private val keyAppearance = Appearance.Text(
         displayText = "",
@@ -97,10 +92,6 @@ class PickerPagesAdapter(
         }
     }
 
-    fun refreshIconTheme(recyclerView: RecyclerView) {
-        // Symbol cells are text keys; icon theme only applies to the sticky backspace.
-    }
-
     fun insertRecent(text: String) {
         if (text.length == 1 && text[0].code.let { it in Digit || it in FullWidthDigit }) return
         recentlyUsed.insert(text)
@@ -111,10 +102,10 @@ class PickerPagesAdapter(
 
     fun getCategoryList(): List<PickerData.Category> = categories
 
-    fun relayoutIfWidthChanged(width: Int): Boolean {
-        if (width <= 0 || width == stripWidth) return false
+    fun updateStripWidth(width: Int) {
+        if (width <= 0 || width == stripWidth) return
         stripWidth = width
-        return true
+        notifyItemRangeChanged(0, itemCount, WidthPayload)
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -158,19 +149,13 @@ class PickerPagesAdapter(
             keyView.setOnLongClickListener(null)
             keyView.swipeEnabled = false
             keyView.onGestureListener = null
-            val width = columnWidth(keyView.parent as? ViewGroup ?: keyView)
-            if (keyView.layoutParams.width != width) {
-                keyView.layoutParams = RecyclerView.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT)
-            }
+            applyItemWidth(keyView)
             return
         }
         val transformed = if (allowPopup) policy.transform(raw) else raw
         keyView.isEnabled = true
         keyView.mainText.text = transformed
-        val width = columnWidth(keyView.parent as? ViewGroup ?: keyView)
-        if (keyView.layoutParams.width != width) {
-            keyView.layoutParams = RecyclerView.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT)
-        }
+        applyItemWidth(keyView)
         keyView.setOnClickListener {
             keyActionListener.onKeyAction(CommitAction(transformed), Source.Keyboard)
         }
@@ -183,44 +168,25 @@ class PickerPagesAdapter(
         keyView.setOnLongClickListener longClick@{ view ->
             if (view !is KeyView) return@longClick false
             val popup = policy.popup(raw) ?: return@longClick false
-            if (!popupOnKeyPress) {
-                view.updateBounds()
-            }
+            view.updateBounds()
             popupActionListener.onPopupAction(
                 PopupAction.ShowKeyboardAction(view.id, popup, view.bounds)
             )
-            false
+            true
         }
-        keyView.swipeEnabled = true
-        keyView.onGestureListener = OnGestureListener { view, event ->
-            view as KeyView
-            when (event.type) {
-                CustomGestureView.GestureType.Down -> {
-                    if (popupOnKeyPress) {
-                        view.updateBounds()
-                        popupActionListener.onPopupAction(
-                            PopupAction.PreviewAction(view.id, raw, view.bounds)
-                        )
-                    }
-                    false
-                }
-                CustomGestureView.GestureType.Move -> {
-                    val action = PopupAction.ChangeFocusAction(view.id, event.x, event.y)
-                    popupActionListener.onPopupAction(action)
-                    action.outResult
-                }
-                CustomGestureView.GestureType.Up -> {
-                    val trigger = PopupAction.TriggerAction(view.id)
-                    popupActionListener.onPopupAction(trigger)
-                    val action = trigger.outAction as? FcitxKeyAction
-                    if (action != null) {
-                        keyActionListener.onKeyAction(CommitAction(action.act), Source.Keyboard)
-                    }
-                    popupActionListener.onPopupAction(PopupAction.DismissAction(view.id))
-                    action != null
-                }
-            }
+        // RecyclerView owns horizontal drags. Variants stay available by long press;
+        // disabling per-key swipe prevents ACTION_CANCEL from being mistaken for a
+        // popup selection while the symbol strip is flinging.
+        keyView.swipeEnabled = false
+        keyView.onGestureListener = null
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(WidthPayload)) {
+            applyItemWidth(holder.keyView)
+            return
         }
+        super.onBindViewHolder(holder, position, payloads)
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
@@ -236,17 +202,27 @@ class PickerPagesAdapter(
         keyView.mainText.setFontTypeFace("key_main_font")
     }
 
+    private fun applyItemWidth(keyView: TextKeyView) {
+        val width = columnWidth(keyView.parent as? ViewGroup ?: keyView)
+        if (keyView.layoutParams.width != width) {
+            keyView.layoutParams =
+                RecyclerView.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+    }
+
     private fun columnWidth(parent: ViewGroup): Int {
         val available = stripWidth.takeIf { it > 0 }
             ?: parent.measuredWidth.takeIf { it > 0 }
             ?: parent.width.takeIf { it > 0 }
-            ?: parent.resources.displayMetrics.widthPixels
+            ?: (parent.resources.displayMetrics.widthPixels * StripWidthFraction).roundToInt()
         return (available / density.columnCount).coerceAtLeast(parent.dp(32))
     }
 
     companion object {
         private val Digit = IntRange('0'.code, '9'.code)
         private val FullWidthDigit = IntRange('０'.code, '９'.code)
+        private const val StripWidthFraction = 0.88f
+        private val WidthPayload = Any()
 
         fun toHorizontalGrid(
             source: List<String>,
@@ -267,6 +243,9 @@ class PickerPagesAdapter(
                     if (row >= rows || col >= columns) continue
                     out[(p * columns + col) * rows + row] = source[srcIndex]
                 }
+            }
+            while (out.lastOrNull().isNullOrEmpty()) {
+                out.removeAt(out.lastIndex)
             }
             return out
         }

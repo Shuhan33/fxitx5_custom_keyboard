@@ -8,6 +8,7 @@ import android.content.ClipData
 import android.content.res.Configuration
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.view.DragEvent
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -386,11 +387,10 @@ data object ButtonsAdjustingWindow : InputWindow.SimpleInputWindow<ButtonsAdjust
                         .setInterpolator(feedbackInterpolator)
                         .start()
                     val payload = DragPayload(section, pos, it)
-                    it.startDragAndDrop(
+                    startButtonDrag(
+                        it,
                         ClipData.newPlainText("button", section.name.lowercase()),
-                        View.DragShadowBuilder(it),
-                        payload,
-                        0
+                        payload
                     )
                 }
             } else {
@@ -476,12 +476,21 @@ data object ButtonsAdjustingWindow : InputWindow.SimpleInputWindow<ButtonsAdjust
                 .setInterpolator(feedbackInterpolator)
                 .start()
             val payload = DragPayload(Section.Top, index, it)
-            it.startDragAndDrop(
+            startButtonDrag(
+                it,
                 ClipData.newPlainText("button", "top"),
-                View.DragShadowBuilder(it),
-                payload,
-                0
+                payload
             )
+        }
+    }
+
+    private fun startButtonDrag(view: View, clipData: ClipData, payload: DragPayload): Boolean {
+        val shadow = View.DragShadowBuilder(view)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            view.startDragAndDrop(clipData, shadow, payload, 0)
+        } else {
+            @Suppress("DEPRECATION")
+            view.startDrag(clipData, shadow, payload, 0)
         }
     }
 

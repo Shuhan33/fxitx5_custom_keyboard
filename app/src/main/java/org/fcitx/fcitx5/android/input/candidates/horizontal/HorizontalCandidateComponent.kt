@@ -60,16 +60,6 @@ class HorizontalCandidateComponent :
     }
 
     private var layoutMinWidth = 0
-    private var layoutFlexGrow = 1f
-
-    /**
-     * (for [HorizontalCandidateMode.AutoFillWidth] only)
-     * Second layout pass is needed when:
-     * [^1] total candidates count < maxSpanCount && [^2] RecyclerView cannot display all of them
-     * In that case, displayed candidates should be stretched evenly (by setting flexGrow to 1.0f).
-     */
-    private var secondLayoutPassNeeded = false
-    private var secondLayoutPassDone = false
     private var highlightMovedInCurrentComposition = false
     private var lastPagedCandidatesSnapshot: List<CandidateWord> = emptyList()
     private var lastPagedCursor = -1
@@ -82,6 +72,7 @@ class HorizontalCandidateComponent :
     private var pendingLegacyCandidateUpdate: Runnable? = null
     private var prefetchInFlight = false
     private var prefetchExhaustedForSnapshot = false
+    private var lastExpandedState: Pair<Int, Boolean>? = null
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
         // New input session should not inherit paged-candidate flow state from previous one.
@@ -101,37 +92,50 @@ class HorizontalCandidateComponent :
 
     companion object {
         const val HorizontalLimit = 10
+        const val EmptyExpandedOffset = -1
     }
 
-    private fun refreshExpanded(childCount: Int) {
-        val total = adapter.total
+    private fun refreshExpanded() {
         val loaded = adapter.candidates.size
-        val allLoaded = loaded == 0 || (total >= 0 && total <= HorizontalLimit)
-        _expandedCandidateOffset.tryEmit(loaded.coerceAtMost(HorizontalLimit).coerceAtLeast(0))
+        val empty = loaded == 0
+        // Expanded candidates are a complete view, not a continuation after the
+        // horizontal strip. Offset 0 includes the first ten candidates there.
+        val expandedOffset = if (empty) EmptyExpandedOffset else 0
+        val state = expandedOffset to empty
+        if (state == lastExpandedState) return
+        lastExpandedState = state
+        _expandedCandidateOffset.tryEmit(expandedOffset)
         bar.expandButtonStateMachine.push(
             ExpandedCandidatesUpdated,
-            ExpandedCandidatesEmpty to allLoaded
+            ExpandedCandidatesEmpty to empty
         )
     }
 
     private fun ensureActiveCandidateVisible(
         originalCandidates: Array<CandidateWord>,
-        total: Int,
         activeIndex: Int,
     ) {
         if (activeIndex !in originalCandidates.indices) {
             return
         }
-        layoutManager.scrollToPosition(activeIndex)
+        val first = layoutManager.findFirstVisibleItemPosition()
+        val last = layoutManager.findLastVisibleItemPosition()
+        if (activeIndex !in first..last) {
+            layoutManager.scrollToPositionWithOffset(activeIndex, 0)
+        }
     }
 
     private fun prefetchMoreCandidates(current: Array<CandidateWord>, total: Int) {
+        // PagedCandidateEvent indices are relative to the current engine page.
+        // Replacing a short later page with global candidates 0..9 makes the
+        // displayed word differ from the word selected by the same index.
+        if (pagedCandidateFlowActive) return
         val loaded = current.size
         if (loaded == 0 || prefetchInFlight || prefetchExhaustedForSnapshot) return
         val want = HorizontalLimit
         if (loaded >= want) return
         prefetchInFlight = true
-        val snapshot = current.toList()
+        val snapshot = current.copyOf()
         fcitx.launchOnReady { api ->
             val extra = api.getCandidates(0, want)
             view.post {
@@ -140,11 +144,11 @@ class HorizontalCandidateComponent :
                     prefetchExhaustedForSnapshot = true
                     return@post
                 }
-                if (adapter.candidates.toList() != snapshot) return@post
+                if (!adapter.candidates.contentEquals(snapshot)) return@post
                 val resolvedTotal = if (total >= 0) total else extra.size
                 val capped = extra.copyOfRange(0, extra.size.coerceAtMost(HorizontalLimit))
                 adapter.updateCandidates(capped, resolvedTotal, adapter.activeIndex, 0)
-                refreshExpanded(layoutManager.childCount)
+                refreshExpanded()
             }
         }
     }
@@ -220,7 +224,6 @@ class HorizontalCandidateComponent :
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     val lm = this@HorizontalCandidateComponent.layoutManager
                     val candAdapter = this@HorizontalCandidateComponent.adapter
-                    refreshExpanded(lm.childCount)
                     val last = lm.findLastVisibleItemPosition()
                     if (last >= candAdapter.itemCount - 3) {
                         prefetchMoreCandidates(candAdapter.candidates, candAdapter.total)
@@ -323,23 +326,19 @@ class HorizontalCandidateComponent :
         activeIndex: Int,
     ) {
         val maxSpanCount = maxSpanCountPref.getValue()
+        val visibleCount = candidates.size.coerceAtMost(HorizontalLimit).coerceAtLeast(1)
         when (fillStyle) {
             NeverFillWidth -> {
                 layoutMinWidth = 0
-                layoutFlexGrow = 0f
-                secondLayoutPassNeeded = false
             }
             AutoFillWidth -> {
-                layoutMinWidth = view.width / maxSpanCount - dividerDrawable.intrinsicWidth
-                layoutFlexGrow = if (candidates.size < maxSpanCount) 0f else 1f
-                // [^1] total candidates count < maxSpanCount
-                secondLayoutPassNeeded = candidates.size < maxSpanCount
-                secondLayoutPassDone = false
+                val spanCount = visibleCount.coerceAtMost(maxSpanCount)
+                layoutMinWidth =
+                    (view.width / spanCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
             }
             AlwaysFillWidth -> {
-                layoutMinWidth = 0
-                layoutFlexGrow = 1f
-                secondLayoutPassNeeded = false
+                layoutMinWidth =
+                    (view.width / visibleCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
             }
         }
         val capped = if (candidates.size > HorizontalLimit) {
@@ -351,13 +350,13 @@ class HorizontalCandidateComponent :
         adapter.updateCandidates(capped, total, cappedActive, 0)
         prefetchExhaustedForSnapshot = false
         view.post {
-            ensureActiveCandidateVisible(candidates, total, activeIndex)
-            refreshExpanded(layoutManager.childCount)
+            ensureActiveCandidateVisible(capped, cappedActive)
+            refreshExpanded()
         }
         prefetchMoreCandidates(candidates, total)
         // not sure why empty candidates won't trigger layout completion
         if (candidates.isEmpty()) {
-            refreshExpanded(0)
+            refreshExpanded()
         }
     }
 }

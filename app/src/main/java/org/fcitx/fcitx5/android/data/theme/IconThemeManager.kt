@@ -13,6 +13,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Xml
@@ -616,7 +617,12 @@ object IconThemeManager {
         // First pass: extract JSON
         var jsonText: String? = null
         val pngEntries = mutableListOf<Pair<String, ByteArray>>()
-        ZipInputStream(src, charset).use { zipStream ->
+        val zipInput = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            ZipInputStream(src, charset)
+        } else {
+            ZipInputStream(src)
+        }
+        zipInput.use { zipStream ->
             var entry = zipStream.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory) {

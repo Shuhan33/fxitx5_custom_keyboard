@@ -67,7 +67,7 @@ class MainFragment : PaddingPreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
-            addCategory("输入") {
+            addCategory(R.string.settings_category_input) {
                 addDestinationPreference(
                     R.string.global_options,
                     R.drawable.ic_baseline_tune_24,
@@ -84,7 +84,7 @@ class MainFragment : PaddingPreferenceFragment() {
                     SettingsRoute.AddonList
                 )
             }
-            addCategory("键盘") {
+            addCategory(R.string.settings_category_keyboard) {
                 addDestinationPreference(
                     R.string.theme,
                     R.drawable.ic_baseline_palette_24,

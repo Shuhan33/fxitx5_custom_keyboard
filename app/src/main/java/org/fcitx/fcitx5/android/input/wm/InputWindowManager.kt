@@ -47,14 +47,14 @@ class InputWindowManager : UniqueViewComponent<InputWindowManager, FrameLayout>(
         remove: View,
         add: View
     ) {
-        if (disableAnimation)
+        if (disableAnimation || (exitAnimation == null && enterAnimation == null))
             return
         enterAnimation?.addTarget(add)
         exitAnimation?.addTarget(remove)
         TransitionManager.beginDelayedTransition(view, TransitionSet().apply {
             enterAnimation?.let { addTransition(it) }
             exitAnimation?.let { addTransition(it) }
-            duration = 100
+            duration = 140L
         })
     }
 
@@ -120,8 +120,10 @@ class InputWindowManager : UniqueViewComponent<InputWindowManager, FrameLayout>(
      * [attachWindow] includes the operation done by [addEssentialWindow].
      */
     fun attachWindow(window: InputWindow) {
-        if (window === currentWindow)
+        if (window === currentWindow) {
             Timber.d("Skip attaching $window")
+            return
+        }
         val newView = if (window is EssentialWindow) {
             // keep the view for essential windows
             essentialWindows[window.key]?.second ?: window.onCreateView()

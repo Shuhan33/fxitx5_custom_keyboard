@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_release">小企鹅输入法.fx</string>
-    <string name="app_name_debug">小企鹅输入法.fx (调试)</string>
+    <string name="app_name_release">slei 键盘</string>
+    <string name="app_name_debug">slei 键盘 (调试)</string>
     <string name="app_name_mainline_release">小企鹅输入法</string>
     <string name="app_name_mainline_debug">小企鹅输入法 (调试)</string>
     <string name="save">保存</string>
+    <string name="settings_category_input">输入</string>
+    <string name="settings_category_keyboard">键盘</string>
     <string name="input_methods">输入法</string>
     <string name="addons">附加组件</string>
     <string name="conf">配置</string>
@@ -198,6 +200,7 @@
     <string name="physical_keyboard_horizontal_candidate_bar">物理键盘使用水平候选栏</string>
     <string name="physical_keyboard_horizontal_candidate_bar_summary">使用物理键盘输入时，在底部显示 Kawaii 栏和水平候选栏</string>
     <string name="clipboard_suggestion">显示剪贴板提示</string>
+    <string name="dismiss_clipboard_suggestion">关闭剪贴板提示</string>
     
     <!-- Split keyboard settings (refactored) -->
     <string name="split_keyboard_enabled">自动分体键盘</string>

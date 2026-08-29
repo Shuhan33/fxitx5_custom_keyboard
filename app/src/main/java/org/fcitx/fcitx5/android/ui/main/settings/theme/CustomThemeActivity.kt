@@ -16,6 +16,7 @@ import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
@@ -272,7 +273,8 @@ class CustomThemeActivity : AppCompatActivity() {
         }
     }
 
-    private fun GradientDrawable.previewColorOrNull(): Int? = color?.defaultColor
+    private fun GradientDrawable.previewColorOrNull(): Int? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) color?.defaultColor else null
 
     private fun currentBackgroundDrawable(themeForBackground: Theme.Custom): BitmapDrawable? {
         return if (themeForBackground.backgroundImage != null)

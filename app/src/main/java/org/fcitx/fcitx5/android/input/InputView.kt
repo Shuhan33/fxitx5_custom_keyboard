@@ -241,21 +241,25 @@ class InputView(
                 rebuildKeyRegions()
             }
 
-            var drewKeyRegion = false
+            // Build one disjoint clip path and replay the blurred RenderNode once.
+            // Drawing the full-screen node once per key made bordered themes scale
+            // linearly with key count (30–40 GPU replays for a normal layout).
+            clipPath.reset()
             keyClipRects.forEachIndexed { index, rect ->
-                val saveId = canvas.save()
                 val radius = keyClipRadii.getOrElse(index) { 0f }
+                clipRectF.set(rect)
                 if (radius > 0f) {
-                    clipRectF.set(rect)
-                    clipPath.reset()
                     clipPath.addRoundRect(clipRectF, radius, radius, Path.Direction.CW)
-                    canvas.clipPath(clipPath)
                 } else {
-                    canvas.clipRect(rect)
+                    clipPath.addRect(clipRectF, Path.Direction.CW)
                 }
+            }
+            val drewKeyRegion = keyClipRects.isNotEmpty()
+            if (drewKeyRegion) {
+                val saveId = canvas.save()
+                canvas.clipPath(clipPath)
                 drawFullScreenBlur(canvas, bitmap)
                 canvas.restoreToCount(saveId)
-                drewKeyRegion = true
             }
 
             // Keyboard window should normally provide KeyView regions.
@@ -719,23 +723,28 @@ class InputView(
 
     private var blurRefreshScheduled = false
     private var blurRefreshRemainingFrames = 0
+    private var blurRefreshHierarchyChanged = false
 
     fun requestBlurRefresh(retryFrames: Int = 1, hierarchyChanged: Boolean = false) {
         if (!keyBlurMaskView.hasBlurBitmap()) return
         blurRefreshRemainingFrames = maxOf(blurRefreshRemainingFrames, retryFrames)
+        blurRefreshHierarchyChanged = blurRefreshHierarchyChanged || hierarchyChanged
         if (blurRefreshScheduled) return
         blurRefreshScheduled = true
         postOnAnimation {
             blurRefreshScheduled = false
             if (!keyBlurMaskView.hasBlurBitmap()) {
                 blurRefreshRemainingFrames = 0
+                blurRefreshHierarchyChanged = false
                 return@postOnAnimation
             }
-            refreshKeyboardBounds(hierarchyChanged = hierarchyChanged)
+            val pendingHierarchyChange = blurRefreshHierarchyChanged
+            blurRefreshHierarchyChanged = false
+            refreshKeyboardBounds(hierarchyChanged = pendingHierarchyChange)
             val remaining = blurRefreshRemainingFrames
             if (remaining > 0) {
                 blurRefreshRemainingFrames = remaining - 1
-                requestBlurRefresh(0, hierarchyChanged = hierarchyChanged)
+                requestBlurRefresh(0)
             } else {
                 blurRefreshRemainingFrames = 0
             }
@@ -2897,22 +2906,18 @@ class InputView(
         keyboardView.outlineProvider = keyboardOutlineProvider
         keyboardView.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
             view.invalidateOutline()
-            keyBlurMaskView.markKeyRegionsDirty()
-            keyBlurMaskView.invalidate()
+            requestBlurRefresh()
         }
         windowManager.view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            keyBlurMaskView.markKeyRegionsDirty()
-            keyBlurMaskView.invalidate()
+            requestBlurRefresh()
         }
         windowManager.view.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
             override fun onChildViewAdded(parent: View?, child: View?) {
-                keyBlurMaskView.markKeyRegionsDirty(hierarchyChanged = true)
-                keyBlurMaskView.invalidate()
+                requestBlurRefresh(hierarchyChanged = true)
             }
 
             override fun onChildViewRemoved(parent: View?, child: View?) {
-                keyBlurMaskView.markKeyRegionsDirty(hierarchyChanged = true)
-                keyBlurMaskView.invalidate()
+                requestBlurRefresh(hierarchyChanged = true)
             }
         })
 

@@ -7,6 +7,7 @@ package org.fcitx.fcitx5.android.input.picker
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.transition.Fade
 import androidx.transition.Transition
 import org.fcitx.fcitx5.android.data.theme.IconThemeManager
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
@@ -64,9 +65,9 @@ class PickerWindow(
         pickerLayout.backspace.reapplyIconThemeOverride()
     }
 
-    override fun enterAnimation(lastWindow: InputWindow): Transition? = null
+    override fun enterAnimation(lastWindow: InputWindow): Transition = Fade(Fade.IN)
 
-    override fun exitAnimation(nextWindow: InputWindow): Transition? = null
+    override fun exitAnimation(nextWindow: InputWindow): Transition = Fade(Fade.OUT)
 
     private val keyActionListener = KeyActionListener { it, source ->
         when (it) {
@@ -133,10 +134,7 @@ class PickerWindow(
             setHasFixedSize(true)
             setItemViewCacheSize(density.columnCount * density.rowCount)
             addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                val width = v.width
-                if (width > 0 && pickerPagesAdapter.relayoutIfWidthChanged(width)) {
-                    pickerPagesAdapter.notifyItemRangeChanged(0, pickerPagesAdapter.itemCount)
-                }
+                pickerPagesAdapter.updateStripWidth(v.width)
             }
         }
         pickerPagesAdapter.showCategory(1)
@@ -155,7 +153,9 @@ class PickerWindow(
             it.onAttach()
             it.reapplyTextScale()
         }
-        if (FontProviders.checkAndClearRefreshFlag()) {
+        // KeyboardWindow owns the global refresh flag. The picker must not consume it,
+        // otherwise the cached main keyboard could miss the same font update.
+        if (FontProviders.needsRefresh()) {
             pickerLayout.embeddedKeyboard.refreshStyle()
             pickerPagesAdapter.notifyDataSetChanged()
         }

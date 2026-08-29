@@ -63,10 +63,13 @@ captures/
 # IntelliJ
 #*.iml
 
-# Keystore files
-# Uncomment the following lines if you do not want to check your keystore files in.
-#*.jks
-#*.keystore
+# Signing material must never be committed.
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

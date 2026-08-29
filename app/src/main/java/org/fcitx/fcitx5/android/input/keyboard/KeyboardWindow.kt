@@ -545,7 +545,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         }
         applyAuxActions(lastAuxActions)
         notifyBarLayoutChanged()
-        service.inputView?.requestBlurRefresh(retryFrames = 8)
+        service.inputView?.requestBlurRefresh(retryFrames = 2)
     }
 
     override fun beforeAttached() {

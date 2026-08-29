@@ -4,11 +4,13 @@
  */
 package org.fcitx.fcitx5.android.data
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.utils.appContext
 import java.io.File
 
 object CacheManager {
-    fun clearTransientCaches() {
+    suspend fun clearTransientCaches() = withContext(Dispatchers.IO) {
         deleteQuietly(appContext.cacheDir)
         appContext.externalCacheDir?.let(::deleteQuietly)
     }

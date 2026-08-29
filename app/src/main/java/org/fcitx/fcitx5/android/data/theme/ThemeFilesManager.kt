@@ -1,5 +1,6 @@
 package org.fcitx.fcitx5.android.data.theme
 
+import android.os.Build
 import kotlinx.serialization.json.Json
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.utils.appContext
@@ -18,6 +19,14 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 object ThemeFilesManager {
+
+    private fun openZip(src: InputStream, charset: Charset?): ZipInputStream {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && charset != null) {
+            ZipInputStream(src, charset)
+        } else {
+            ZipInputStream(src)
+        }
+    }
 
     private val themeRootDir: File by lazy {
         File(appContext.getExternalFilesDir(null), "theme").also { it.mkdirs() }
@@ -379,7 +388,7 @@ object ThemeFilesManager {
         }
 
     private fun decodeThemeWithEncoding(src: InputStream, encoding: String): Theme.Custom {
-        return ZipInputStream(src, Charset.forName(encoding)).use { zipStream ->
+        return openZip(src, Charset.forName(encoding)).use { zipStream ->
             var entry = zipStream.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory && entry.name.endsWith(".json")) {
@@ -410,7 +419,7 @@ object ThemeFilesManager {
         importedName: String?
     ): Triple<Boolean, Theme.Custom, Boolean> {
         val charset = encoding?.let { Charset.forName(it) }
-        return ZipInputStream(src, charset).use { zipStream ->
+        return openZip(src, charset).use { zipStream ->
             withTempDir { tempDir ->
                 // Extract all files and keep track of their paths
                 val extractedPaths = mutableMapOf<String, File>()

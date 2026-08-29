@@ -5,8 +5,10 @@
 
 <https://github.com/Shuhan33/fxitx5_custom_keyboard>
 
-当前发布版本：**0.2.0**  
-应用包名：`org.fcitx5.slei.android.fx`  
+当前发布版本：**1.0.0**
+
+应用包名：`org.fcitx5.slei.android.fx`
+
 许可证：LGPL-2.1-or-later
 
 ---
@@ -15,13 +17,16 @@
 
 ### 主要改动
 
-- 拼音候选支持英文联想，例如输入 `fathe` 或 `father` 时可以看到 `father`。
+- 应用发布名称统一为“slei 键盘”，减少上游 `.fx` 名称与定制版本之间的混淆。
+- 拼音候选支持保守的常用英文补全，例如输入 `fathe` 或 `father` 时可以看到 `father`；`uohx` 这类未命中英文词典的双拼串不会作为英文候选占位。
 - 英文联想开关位于“设置 → 键盘 → 英文联想”，默认开启。
 - 中文键盘底栏不再放“英”快捷开关；自定义布局若添加该功能，显示为 `ABC`。
-- 候选栏支持连续左右滑动，横向最多展示前 10 个候选；更多候选通过下拉展开栏查看。
+- 候选栏支持连续左右滑动，横向最多展示前 10 个候选；只要存在候选，最右侧下拉按钮就始终可用，展开后从第 1 个候选开始显示完整列表。
 - 符号页改为真正的横向连续滚动，可以停在两列之间，不是整页切换。
-- 数字键盘的九宫格横向收窄，数字键盘高度与字母键盘分开控制。
+- 数字键盘的九宫格横向收窄；主键盘、数字键盘和符号键盘共用同一高度，竖屏默认 27%。
 - 中文键盘的 `V` 键上滑输入下划线 `_`。
+- 检测到新复制文本后，下一次输入会在候选区显示可关闭的快捷粘贴卡片；密码输入框不会显示。完整剪贴板支持编辑、删除、置顶和再次使用排序。
+- 中文排序使用 APK 内置的 libime 词典与语言模型，离线可用；本地输入历史按次数以非线性权重参与排序，并可在高级设置调整上限。
 - 保留 Apple 风格的默认主题、键盘布局和相关视觉调整。
 
 ### 安装包位置
@@ -35,7 +40,7 @@ D:\Lei\Documents\slei-keyboard-apk
 文件名包含应用、版本和 ABI，例如：
 
 ```text
-org.fcitx5.slei.android.fx-0.2.0-arm64-release.apk
+org.fcitx5.slei.android.fx-1.0.0-arm64-release.apk
 ```
 
 目前主要构建 `arm64-v8a`。安装前请确认手机允许安装来自文件管理器的 APK；更新安装时需要使用相同签名。
@@ -49,7 +54,22 @@ org.fcitx5.slei.android.fx-0.2.0-arm64-release.apk
 - **主版本**：包名、数据格式或主要使用方式不兼容，或准备作为稳定公开版本，例如 `0.x → 1.0.0`。
 
 版本配置在 `build-logic/convention/src/main/kotlin/Versions.kt`。  
-`arm64-v8a` 的 `versionCode` 计算方式是 `baseVersionCode * 10 + 2`；例如 `0.2.0` 使用 `212`。
+`arm64-v8a` 的 `versionCode` 计算方式是 `baseVersionCode * 10 + 2`；正式版 `1.0.0` 使用 `1002`。
+
+### 1.0.0 发行说明
+
+- 修复重复附加同一输入窗口时仍执行完整移除、布局和重挂载的问题。
+- 候选栏仅在候选数据变化时更新展开状态，不再在每个滚动像素重复触发状态机。
+- 清理缓存改为后台 I/O，避免设置页面被大目录遍历阻塞。
+- 删除已经被连续 RecyclerView 取代的旧分页符号 UI 实现，降低维护成本和包内冗余。
+- 数字区与两侧功能键的宽度差缩小；主键盘、数字键盘和符号键盘共用同一高度，竖屏默认值按实机体验设为 27%。
+- 符号滚动保留 Android 原生惯性与任意位置停止，并减少首帧宽度跳变和无效刷新。
+- 修复分页候选不足 10 项时显示词与实际上屏词可能不一致的问题；右侧展开按钮始终固定，完整候选从第 1 项开始。
+- 修复拼音配置被写入错误 INI 节、历史权重与小鹤双拼设置可能静默失效的问题，并迁移旧配置。
+- 英文候选仅保留词典支持的前缀补全，删除任意字母串原样进入候选的逻辑。
+- 删除首次启动联网下载词库及失败后反复重试的行为，保证离线首次启动的一致性。
+- 新增剪贴板快捷粘贴关闭按钮与敏感输入保护；剪贴板详情继续支持编辑、删除和置顶。
+- 通过 Ubuntu `arm64-v8a` release 全量构建、R8、lintVital 和完整 lint 检查。
 
 ### Ubuntu 编译
 
@@ -67,6 +87,14 @@ export GRADLE_OPTS=-Xmx3072m
 
 ./gradlew :app:assembleFxRelease
 ```
+
+完整 lint（先完成一次 assemble，使 native 数据描述已经生成）：
+
+```bash
+./gradlew :app:lintFxRelease -x :app:generateDataDescriptor
+```
+
+该版本固定使用中文基础界面，因此 lint 仅关闭上游遗留的 `MissingTranslation` 检查；其余正确性检查保持开启。
 
 需要的主要工具版本：
 
@@ -130,8 +158,11 @@ app/build/outputs/apk/fx/release/
 
 - 符号页必须使用连续横向滚动，不要恢复 ViewPager 分页，也不要加入 `PagerSnapHelper`。
 - 符号网格使用横向 `GridLayoutManager` 时，数据必须转换为列优先顺序，否则符号排列会错位。
-- 候选横滑上限是 10；第 11 个候选开始由 expanded candidate window 展示。
+- 候选横滑上限是 10；右侧展开按钮不随滚动位置消失，expanded candidate window 从 offset 0 显示包含前 10 个在内的完整列表。
 - 英文联想开关的设置 key 是 `english_spell_candidates`，对应 pinyin 配置中的 `SpellEnabled`。
+- 中文模式下英文候选必须来自内置英文词典并匹配输入前缀；不要重新加入“任意 Latin 字符串原样候选”。
+- `pinyin.conf` 的 `SpellEnabled`、`HistoryWeightPercent`、`ShuangpinProfile` 等键必须写在配置根部，不能放入 `[PinyinEngine]` 节。
+- 词频模型必须保持离线可用，不要在输入法启动路径加入网络词库下载或重试。
 - 自定义布局中的英文联想按键文案是 `ABC`，默认中文键盘布局不包含该按键。
 - 修改 pinyin/libime submodule 时，要同时维护父仓库中的补丁文件和 CMake 应用逻辑，避免只在本地 dirty submodule 生效。
 - native 构建只在 Ubuntu VM 执行，不要在 Windows 上运行完整 Gradle native build。

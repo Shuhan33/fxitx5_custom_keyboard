@@ -12,15 +12,12 @@ class CandidateViewHolder(val ui: CandidateItemUi) : RecyclerView.ViewHolder(ui.
     var idx = -1
         private set
 
-    var listenersAttached = false
-    var lastMinWidth = Int.MIN_VALUE
-    var lastFlexGrow = Float.NaN
-
     var candidate: CandidateWord = CandidateWord.Empty
         private set
 
     fun update(newIndex: Int, newCandidate: CandidateWord) {
         idx = newIndex
+        itemView.contentDescription = newCandidate.text.takeIf { it.isNotBlank() }
         if (candidate != newCandidate) {
             candidate = newCandidate
             ui.updateCandidate(newCandidate)

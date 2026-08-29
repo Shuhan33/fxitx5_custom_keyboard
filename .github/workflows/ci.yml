@@ -70,7 +70,7 @@ jobs:
 
       - name: Install CMake
         run: |
-          sdkmanager --install "cmake;3.22.1"
+          sdkmanager --install "cmake;3.31.6"
 
       - name: Install system dependencies (Ubuntu)
         run: |

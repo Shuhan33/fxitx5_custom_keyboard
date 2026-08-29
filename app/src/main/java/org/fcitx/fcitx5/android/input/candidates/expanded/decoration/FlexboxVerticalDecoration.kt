@@ -12,6 +12,8 @@ import androidx.recyclerview.widget.RecyclerView
 import splitties.dimensions.dp
 
 class FlexboxVerticalDecoration(val drawable: Drawable) : RecyclerView.ItemDecoration() {
+    private var verticalInset = -1
+
     override fun getItemOffsets(
         outRect: Rect,
         view: View,
@@ -34,6 +36,9 @@ class FlexboxVerticalDecoration(val drawable: Drawable) : RecyclerView.ItemDecor
 
     override fun onDraw(c: Canvas, parent: RecyclerView, state: RecyclerView.State) {
         val layoutManager = parent.layoutManager ?: return
+        if (verticalInset < 0) {
+            verticalInset = parent.dp(8)
+        }
         for (i in 0 until layoutManager.childCount) {
             val view = parent.getChildAt(i) ?: continue
             val lp = view.layoutParams as RecyclerView.LayoutParams
@@ -57,8 +62,7 @@ class FlexboxVerticalDecoration(val drawable: Drawable) : RecyclerView.ItemDecor
             val top = view.top - lp.topMargin
             val bottom = view.bottom + lp.bottomMargin
             // make the divider shorter
-            val vInset = parent.dp(8)
-            drawable.setBounds(left, top + vInset, right, bottom - vInset)
+            drawable.setBounds(left, top + verticalInset, right, bottom - verticalInset)
             drawable.draw(c)
         }
     }

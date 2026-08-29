@@ -42,6 +42,7 @@ open class PagingCandidateViewAdapter(val theme: Theme) :
         private set
 
     fun refreshWithOffset(offset: Int) {
+        if (this.offset == offset && !FontProviders.needsRefresh()) return
         refreshCandidateFontIfNeeded()
         this.offset = offset
         refresh()

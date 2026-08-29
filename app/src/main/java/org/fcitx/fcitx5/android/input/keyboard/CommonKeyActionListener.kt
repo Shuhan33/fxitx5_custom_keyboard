@@ -75,7 +75,7 @@ class CommonKeyActionListener :
         if (inputMethodEntryCached.languageCode.startsWith("zh")) {
             // Chinese: select 1st candidate if available
             // Check for candidates in prediction mode (preedit empty but candidates available)
-            val hasCandidates = horizontalCandidate.adapter.total > 0
+            val hasCandidates = horizontalCandidate.adapter.itemCount > 0
             if (clientPreeditCached.isNotEmpty() || inputPanelCached.preedit.isNotEmpty() || hasCandidates) {
                 // preedit not empty or prediction candidates available, select the first candidate
                 select(0)
@@ -137,7 +137,8 @@ class CommonKeyActionListener :
                     sendKey(action.sym, action.states)
                 }
                 is CommitAction -> {
-                    val composing = !preeditState.isEmpty || horizontalCandidate.adapter.total > 0
+                    val composing =
+                        !preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0
                     if (!composing) {
                         service.lifecycleScope.launch { service.commitText(action.text) }
                     } else {

@@ -70,6 +70,7 @@ class CandidateItemUi(
             this.active = active
             renderCandidate()
         }
+        root.isSelected = this.active
         text.setTextColor(if (this.active) theme.genericActiveForegroundColor else theme.candidateTextColor)
         text.background = null
         root.background = if (this.active) activeBackground else normalBackground

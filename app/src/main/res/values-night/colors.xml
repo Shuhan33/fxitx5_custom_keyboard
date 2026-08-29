@@ -2,4 +2,5 @@
 <resources>
     <color name="apple_grouped_bg">#000000</color>
     <color name="apple_label">#FFFFFF</color>
+    <color name="apple_separator">#38383A</color>
 </resources>

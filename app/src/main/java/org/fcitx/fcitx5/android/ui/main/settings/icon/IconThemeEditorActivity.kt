@@ -26,6 +26,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
+import androidx.core.view.MenuItemCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
@@ -114,18 +115,20 @@ class IconThemeEditorActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         val normalIconTint = ColorStateList.valueOf(styledColor(android.R.attr.colorControlNormal))
         if (isEditingExisting) {
-            menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, getString(R.string.delete))
-                .setIcon(R.drawable.ic_baseline_delete_24)
-                .setIconTintList(ColorStateList.valueOf(color(R.color.red_400)))
-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(Menu.NONE, MENU_DELETE, Menu.NONE, getString(R.string.delete)).apply {
+                setIcon(R.drawable.ic_baseline_delete_24)
+                MenuItemCompat.setIconTintList(this, ColorStateList.valueOf(color(R.color.red_400)))
+                setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            }
         }
-        menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, getString(R.string.theme_name))
-            .setIcon(R.drawable.ic_baseline_edit_24)
-            .setIconTintList(normalIconTint)
-            .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+        menu.add(Menu.NONE, MENU_RENAME, Menu.NONE, getString(R.string.theme_name)).apply {
+            setIcon(R.drawable.ic_baseline_edit_24)
+            MenuItemCompat.setIconTintList(this, normalIconTint)
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+        }
         saveMenuItem = menu.add(Menu.NONE, MENU_SAVE, Menu.NONE, getString(R.string.save)).apply {
             setIcon(R.drawable.ic_baseline_check_24)
-            iconTintList = normalIconTint
+            MenuItemCompat.setIconTintList(this, normalIconTint)
             setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
         }
         refreshSaveButtonState()

@@ -18,6 +18,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.StateListDrawable
+import android.os.Build
 import android.util.SparseIntArray
 import android.view.Gravity
 import android.view.KeyEvent
@@ -1260,13 +1261,17 @@ abstract class BaseKeyboard(
             val parents = recreateList
                 .mapNotNull { it.item.keyView.parent as? ViewGroup }
                 .distinct()
-            parents.forEach { it.suppressLayout(true) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                parents.forEach { it.suppressLayout(true) }
+            }
             try {
                 recreateList.forEach { u ->
                     recreateComposeAwareKeyView(u.item, u.activeDef, u.activeAppearance)
                 }
             } finally {
-                parents.forEach { it.suppressLayout(false) }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    parents.forEach { it.suppressLayout(false) }
+                }
             }
             // Update occluders so water ripple masking uses the recreated views
             keyboardWaterRippleView?.setOccluders(

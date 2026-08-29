@@ -4,7 +4,7 @@
  */
 package org.fcitx.fcitx5.android.input.clipboard
 
-import android.icu.text.BreakIterator
+import java.text.BreakIterator
 import java.util.Locale
 
 data class ClipboardToken(

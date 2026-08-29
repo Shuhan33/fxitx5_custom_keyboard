@@ -26,6 +26,12 @@ val includeMainlineFlavor =
     providers.gradleProperty("includeMainlineFlavor").map(String::toBoolean).orElse(false)
 
 android {
+    lint {
+        // This personal distribution intentionally uses the Chinese base UI.
+        // Keep all correctness checks enabled while ignoring incomplete legacy
+        // translations inherited from the multilingual upstream project.
+        disable += "MissingTranslation"
+    }
     namespace = packageBase
 
     defaultConfig {

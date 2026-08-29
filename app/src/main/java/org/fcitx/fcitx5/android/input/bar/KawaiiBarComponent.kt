@@ -242,12 +242,20 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         }
     }
 
+    private fun dismissClipboardSuggestion() {
+        clipboardTimeoutJob?.cancel()
+        clipboardTimeoutJob = null
+        isClipboardFresh = false
+        evalIdleUiState(fromUser = true)
+    }
+
     private fun evalIdleUiState(fromUser: Boolean = false) {
         val newState = when {
             numberRowState == NumberRowState.ForceShow -> IdleUi.State.NumberRow
-            isClipboardFresh -> IdleUi.State.Clipboard
+            isClipboardFresh && !isCapabilityFlagsPassword -> IdleUi.State.Clipboard
             isInlineSuggestionPresent -> IdleUi.State.InlineSuggestion
-            isCapabilityFlagsPassword && !isKeyboardLayoutNumber && numberRowState != NumberRowState.ForceHide -> IdleUi.State.NumberRow
+            toolbarNumRowOnPassword && isCapabilityFlagsPassword &&
+                !isKeyboardLayoutNumber && numberRowState != NumberRowState.ForceHide -> IdleUi.State.NumberRow
             /**
              * state matrix:
              *                               expandToolbarByDefault
@@ -269,13 +277,6 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     private val hideKeyboardCallback = View.OnClickListener {
         hideKeyboardAndExitAdjustingMode()
-    }
-
-    private val swipeDownExpandCallback = CustomGestureView.OnGestureListener { _, e ->
-        if (e.type == CustomGestureView.GestureType.Up && e.totalY > 0) {
-            hideKeyboardAndExitAdjustingMode()
-            true
-        } else false
     }
 
     // Combined gesture: determine primary direction by comparing totalX and totalY.
@@ -540,12 +541,12 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                         windowManager.attachWindow(ClipboardWindow(ClipboardCategory.Media))
                     } else {
                         service.commitText(it.text)
+                        service.lifecycleScope.launch {
+                            ClipboardManager.markUsed(it.id)
+                        }
                     }
                 }
-                clipboardTimeoutJob?.cancel()
-                clipboardTimeoutJob = null
-                isClipboardFresh = false
-                evalIdleUiState()
+                dismissClipboardSuggestion()
             }
             setOnLongClickListener {
                 ClipboardManager.lastEntry?.let {
@@ -553,6 +554,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
                 }
                 true
             }
+        }
+        ui.clipboardUi.close.setOnClickListener {
+            dismissClipboardSuggestion()
         }
     }
 
@@ -649,13 +653,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     private val candidateUi by lazy {
-        CandidateUi(context, theme, horizontalCandidate.view).apply {
-            expandButton.apply {
-                swipeEnabled = true
-                swipeThresholdY = dp(HEIGHT.toFloat())
-                onGestureListener = swipeDownExpandCallback
-            }
-        }
+        CandidateUi(context, theme, horizontalCandidate.view)
     }
 
     private val titleUi by lazy {
@@ -778,13 +776,16 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             idleUi.privateMode(info.imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING))
         }
-        isCapabilityFlagsPassword = toolbarNumRowOnPassword && capFlags.has(CapabilityFlag.Password)
+        isCapabilityFlagsPassword = capFlags.has(CapabilityFlag.Password)
         isInlineSuggestionPresent = false
         numberRowState = NumberRowState.Auto
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             idleUi.inlineSuggestionsBar.clear()
         }
         refreshHideKeyboardVoiceButton()
+        if (clipboardSuggestion.getValue() && !isCapabilityFlagsPassword) {
+            ClipboardManager.refreshPrimaryClipForInput()
+        }
         /*
                 "password=${capFlags.has(CapabilityFlag.Password)} shouldShow=$shouldShowVoiceInput"
         )

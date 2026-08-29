@@ -58,12 +58,18 @@ open class HorizontalCandidateViewAdapter(val theme: Theme) :
         indexOffset: Int = this.indexOffset,
     ) {
         val fontChanged = refreshCandidateFontIfNeeded()
-        if (
-            !fontChanged &&
-            this.total == total &&
-            this.activeIndex == activeIndex &&
+        val sameContent = this.total == total &&
             this.indexOffset == indexOffset &&
             this.candidates.contentEquals(data)
+        if (!fontChanged && sameContent && this.activeIndex != activeIndex) {
+            updateActiveIndex(activeIndex)
+            return
+        }
+        if (
+            !fontChanged &&
+            sameContent &&
+            this.activeIndex == activeIndex &&
+            this.indexOffset == indexOffset
         ) {
             return
         }
@@ -88,7 +94,8 @@ open class HorizontalCandidateViewAdapter(val theme: Theme) :
 
     override fun getItemCount() = candidates.size
 
-    override fun getItemId(position: Int) = candidates.getOrNull(position).hashCode().toLong()
+    override fun getItemId(position: Int) =
+        candidates.getOrNull(position).hashCode().toLong() * 31L + position
 
     @CallSuper
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CandidateViewHolder {

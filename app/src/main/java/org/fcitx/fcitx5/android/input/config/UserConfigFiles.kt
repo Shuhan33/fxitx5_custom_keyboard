@@ -11,7 +11,7 @@ import java.io.IOException
 
 object UserConfigFiles {
     const val DEFAULT_TEXT_KEYBOARD_LAYOUT_PROFILE = "default"
-    private const val SLEI_CUSTOM_REV = 7
+    private const val SLEI_CUSTOM_REV = 8
     private const val TEXT_KEYBOARD_LAYOUT_DEFAULT_FILE_NAME = "TextKeyboardLayout.json"
     private const val TEXT_KEYBOARD_LAYOUT_PREFIX = "TextKeyboardLayout."
     private const val JSON_SUFFIX = ".json"
@@ -153,7 +153,7 @@ object UserConfigFiles {
         val conf = configDir()?.let { File(it, "conf/pinyin.conf") } ?: return
         conf.parentFile?.mkdirs()
         val original = if (conf.exists()) conf.readText() else ""
-        val updated = upsertIniKey(original, key, value)
+        val updated = upsertRootIniKey(original, key, value)
         if (updated != original) conf.writeText(updated)
     }
 
@@ -177,36 +177,43 @@ object UserConfigFiles {
         conf.parentFile?.mkdirs()
         val original = if (conf.exists()) conf.readText() else ""
         var updated = original
-        updated = upsertIniKey(updated, "ShuangpinProfile", "Xiaohe")
-        updated = upsertIniKey(updated, "ChaiziEnabled", "False")
-        updated = upsertIniKey(updated, "StrokeCandidateEnabled", "False")
-        updated = upsertIniKey(updated, "ExtBEnabled", "False")
-        updated = upsertIniKey(updated, "Prediction", "True")
+        updated = upsertRootIniKey(updated, "ShuangpinProfile", "Xiaohe")
+        updated = upsertRootIniKey(updated, "ChaiziEnabled", "False")
+        updated = upsertRootIniKey(updated, "StrokeCandidateEnabled", "False")
+        updated = upsertRootIniKey(updated, "ExtBEnabled", "False")
+        updated = upsertRootIniKey(updated, "Prediction", "True")
         val spellEnabled = runCatching {
             org.fcitx.fcitx5.android.data.prefs.AppPrefs.getInstance()
                 .keyboard.englishSpellCandidates.getValue()
         }.getOrDefault(true)
-        updated = upsertIniKey(updated, "SpellEnabled", if (spellEnabled) "True" else "False")
+        updated = upsertRootIniKey(updated, "SpellEnabled", if (spellEnabled) "True" else "False")
         val weightPercent = runCatching {
             org.fcitx.fcitx5.android.data.prefs.AppPrefs.getInstance()
                 .advanced.userHistoryWeightPercent.getValue()
         }.getOrDefault(45)
-        updated = upsertIniKey(updated, "HistoryWeightPercent", weightPercent.coerceIn(10, 90).toString())
+        updated = upsertRootIniKey(
+            updated,
+            "HistoryWeightPercent",
+            weightPercent.coerceIn(10, 90).toString()
+        )
         if (updated != original) {
             conf.writeText(updated)
         }
     }
 
-    private fun upsertIniKey(text: String, key: String, value: String): String {
-        val regex = Regex("""^$key\s*=.*$""", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
-        return if (regex.containsMatchIn(text)) {
-            text.replace(regex, "$key=$value")
-        } else if (text.isBlank()) {
-            "[PinyinEngine]\n$key=$value\n"
-        } else if (text.endsWith("\n")) {
-            text + "$key=$value\n"
-        } else {
-            text + "\n$key=$value\n"
+    private fun upsertRootIniKey(text: String, key: String, value: String): String {
+        // fcitx's pinyin.conf options live at the root. Remove old copies even
+        // when an earlier custom build accidentally wrote them below a section,
+        // then prepend the canonical root value before every section header.
+        val keyLine = Regex(
+            """^\s*${Regex.escape(key)}\s*=.*(?:\r?\n|$)""",
+            setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE)
+        )
+        val withoutOldValue = text.replace(keyLine, "").trimStart('\r', '\n')
+        return buildString {
+            append(key).append('=').append(value).append('\n')
+            append(withoutOldValue)
+            if (withoutOldValue.isNotEmpty() && !withoutOldValue.endsWith('\n')) append('\n')
         }
     }
 

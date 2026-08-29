@@ -232,15 +232,28 @@ object DataManager {
     private fun hasSameSignature(packageName: String): Boolean {
         val pm = appContext.packageManager
         return try {
-            val mainSig = pm.getPackageInfo(
-                appContext.packageName,
-                PackageManager.GET_SIGNING_CERTIFICATES
-            )?.signingInfo?.apkContentsSigners ?: return false
-            val callerSig = pm.getPackageInfo(
-                packageName,
-                PackageManager.GET_SIGNING_CERTIFICATES
-            )?.signingInfo?.apkContentsSigners ?: return false
-            mainSig.contentEquals(callerSig)
+            val mainSig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pm.getPackageInfo(
+                    appContext.packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                ).signingInfo?.apkContentsSigners.orEmpty()
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(
+                    appContext.packageName,
+                    PackageManager.GET_SIGNATURES
+                ).signatures.orEmpty()
+            }
+            val callerSig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pm.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                ).signingInfo?.apkContentsSigners.orEmpty()
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures.orEmpty()
+            }
+            mainSig.isNotEmpty() && callerSig.isNotEmpty() && mainSig.contentEquals(callerSig)
         } catch (e: Exception) {
             Timber.w(e)
             false

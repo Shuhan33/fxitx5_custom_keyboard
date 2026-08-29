@@ -1,8 +1,8 @@
 diff --git a/im/pinyin/pinyin.cpp b/im/pinyin/pinyin.cpp
-index 513a8d4..4a16184 100644
+index 513a8d4..5683307 100644
 --- a/im/pinyin/pinyin.cpp
 +++ b/im/pinyin/pinyin.cpp
-@@ -545,15 +545,37 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
+@@ -545,15 +545,47 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
              selectedLength <= context.cursor()) {
              auto [hasUpper, engNess] =
                  englishNess(parsedPy, context.useShuangpin());
@@ -26,24 +26,34 @@ index 513a8d4..4a16184 100644
                          : std::string::npos);
 -                auto results = spell()->call<ISpell::hintWithProvider>(
 -                    "en", SpellProvider::Custom, pyBeforeCursor, engNess);
-+                auto results = engNess
-+                                   ? spell()->call<ISpell::hintWithProvider>(
-+                                         "en", SpellProvider::Custom,
-+                                         pyBeforeCursor, engNess)
-+                                   : std::vector<std::string>{};
-+
-+                // Keep the typed latin word itself. Completing "father" can make
-+                // pinyin scoring think the input is "done", which used to drop
-+                // the English candidate even though "fathe" still showed it.
-+                if (latinInput &&
-+                    std::find(results.begin(), results.end(), pyBeforeCursor) ==
-+                        results.end()) {
-+                    results.insert(results.begin(), pyBeforeCursor);
++                const size_t spellLimit =
++                    std::max<size_t>(engNess, latinInput ? 8 : 0);
++                auto rawResults = spell()->call<ISpell::hintWithProvider>(
++                    "en", SpellProvider::Custom, pyBeforeCursor, spellLimit);
++                std::vector<std::string> results;
++                results.reserve(rawResults.size());
++                for (auto &result : rawResults) {
++                    // In Chinese mode only expose dictionary-backed completion,
++                    // never arbitrary typo correction. This keeps common English
++                    // such as "father" while suppressing shuangpin-like "uohx".
++                    const bool prefixMatch =
++                        result.size() >= pyBeforeCursor.size() &&
++                        std::equal(pyBeforeCursor.begin(), pyBeforeCursor.end(),
++                                   result.begin(), [](char lhs, char rhs) {
++                                       return charutils::tolower(lhs) ==
++                                              charutils::tolower(rhs);
++                                   });
++                    if (prefixMatch) {
++                        results.emplace_back(std::move(result));
++                        if (results.size() >= 3) {
++                            break;
++                        }
++                    }
 +                }
  
                  // Our hint doesn't work well with mixed case, so, always put a
                  // word as is.
-@@ -1175,6 +1197,16 @@ void PinyinEngine::populateConfig() {
+@@ -1175,6 +1207,16 @@ void PinyinEngine::populateConfig() {
                                 ? libime::PinyinDictFlag::NoFlag
                                 : libime::PinyinDictFlag::Disabled);
  

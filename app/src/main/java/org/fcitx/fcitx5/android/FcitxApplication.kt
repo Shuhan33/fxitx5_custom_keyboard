@@ -204,11 +204,6 @@ class FcitxApplication : Application() {
         // reuse the cached typefaces instead of doing all file work on the main thread.
         FontProviders.preloadFontsAsync()
         Locales.onLocaleChange(resources.configuration)
-        if (!isDirectBootMode) {
-            coroutineScope.launch {
-                org.fcitx.fcitx5.android.data.pinyin.CorpusDictionarySync.importIfNeeded()
-            }
-        }
         registerReceiver(shutdownReceiver, IntentFilter(Intent.ACTION_SHUTDOWN))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isDirectBootMode) {
             AppPrefs.getInstance().syncToDeviceEncryptedStorage()

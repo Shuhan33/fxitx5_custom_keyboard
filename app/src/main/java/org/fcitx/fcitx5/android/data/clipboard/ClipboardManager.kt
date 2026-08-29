@@ -507,6 +507,17 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
         }
     }
 
+    /**
+     * Android may suppress clipboard callbacks while the IME is not active.
+     * Re-read the current clip when a new input session starts so the next
+     * keyboard invocation can offer the most recently copied text.
+     */
+    fun refreshPrimaryClipForInput() {
+        if (enabledPref.getValue()) {
+            onPrimaryClipChanged()
+        }
+    }
+
     private suspend fun removeOutdated() {
         var deletedAny = false
         deletedAny = trimOutdatedEntries(

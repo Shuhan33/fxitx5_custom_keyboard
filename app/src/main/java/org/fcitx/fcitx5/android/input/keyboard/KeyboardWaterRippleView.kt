@@ -6,11 +6,13 @@ package org.fcitx.fcitx5.android.input.keyboard
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
+import android.graphics.Region
 import android.graphics.Shader
+import android.os.Build
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.View
@@ -26,12 +28,13 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
     private data class RippleState(
         val cx: Float,
         val cy: Float,
-        @ColorInt val color: Int,
         val baseAlpha: Int,
         val targetRadius: Float,
         val durationMs: Long,
         val fadeOutMs: Long,
-        val startTimeMs: Long
+        val startTimeMs: Long,
+        val shader: RadialGradient,
+        val shaderMatrix: Matrix = Matrix()
     )
 
     private val rippleLocation = IntArray(2)
@@ -50,14 +53,11 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
     private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
-    private val clearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-    }
-
     private val ripples = ArrayDeque<RippleState>()
     private var frameScheduled = false
     private var occluders: List<View> = emptyList()
     private val occluderSnapshots = ArrayList<OccluderSnapshot>(64)
+    private val occluderPath = Path()
     private var occludersDirty = true
     private val occluderLayoutListener = OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
         occludersDirty = true
@@ -94,16 +94,27 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
             RippleState(
                 cx = centerX,
                 cy = centerY,
-                color = color,
                 baseAlpha = baseAlpha,
                 targetRadius = targetRadius,
                 durationMs = finalDuration,
                 fadeOutMs = fadeOutMs,
-                startTimeMs = SystemClock.uptimeMillis()
+                startTimeMs = SystemClock.uptimeMillis(),
+                shader = RadialGradient(
+                    0f,
+                    0f,
+                    1f,
+                    intArrayOf(
+                        colorWithAlpha(color, 255),
+                        colorWithAlpha(color, 158),
+                        colorWithAlpha(color, 31)
+                    ),
+                    floatArrayOf(0f, 0.62f, 1f),
+                    Shader.TileMode.CLAMP
+                )
             )
         )
 
-        while (ripples.size > 8) {
+        while (ripples.size > 5) {
             ripples.removeFirst()
         }
         scheduleFrame()
@@ -126,12 +137,14 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
         frameScheduled = false
         ripples.clear()
         occluderSnapshots.clear()
+        occluderPath.reset()
         super.onDetachedFromWindow()
     }
 
     private fun rebuildOccluderSnapshots() {
         occludersDirty = false
         occluderSnapshots.clear()
+        occluderPath.reset()
         if (occluders.isEmpty() || width <= 0 || height <= 0) return
 
         getLocationInWindow(rippleLocation)
@@ -168,6 +181,27 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
                 )
             }
         }
+        occluderSnapshots.forEach { snapshot ->
+            if (snapshot.roundRect) {
+                occluderPath.addRoundRect(
+                    snapshot.left,
+                    snapshot.top,
+                    snapshot.right,
+                    snapshot.bottom,
+                    snapshot.cornerRadius,
+                    snapshot.cornerRadius,
+                    Path.Direction.CW
+                )
+            } else {
+                occluderPath.addRect(
+                    snapshot.left,
+                    snapshot.top,
+                    snapshot.right,
+                    snapshot.bottom,
+                    Path.Direction.CW
+                )
+            }
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -178,7 +212,14 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
         }
         val punchHoles = occluderSnapshots.isNotEmpty()
         val saveCount = if (punchHoles) {
-            canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+            canvas.save().also {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    canvas.clipOutPath(occluderPath)
+                } else {
+                    @Suppress("DEPRECATION")
+                    canvas.clipPath(occluderPath, Region.Op.DIFFERENCE)
+                }
+            }
         } else {
             -1
         }
@@ -222,37 +263,17 @@ class KeyboardWaterRippleView @JvmOverloads constructor(
                 continue
             }
 
-            val inner = colorWithAlpha(ripple.color, (alpha * 1.00f).toInt())
-            val mid = colorWithAlpha(ripple.color, (alpha * 0.62f).toInt())
-            val outer = colorWithAlpha(ripple.color, (alpha * 0.12f).toInt())
-            ripplePaint.shader = RadialGradient(
-                ripple.cx,
-                ripple.cy,
-                radius,
-                intArrayOf(inner, mid, outer),
-                floatArrayOf(0f, 0.62f, 1f),
-                Shader.TileMode.CLAMP
-            )
+            ripple.shaderMatrix.setScale(radius, radius)
+            ripple.shaderMatrix.postTranslate(ripple.cx, ripple.cy)
+            ripple.shader.setLocalMatrix(ripple.shaderMatrix)
+            ripplePaint.shader = ripple.shader
+            ripplePaint.alpha = alpha
             canvas.drawCircle(ripple.cx, ripple.cy, radius, ripplePaint)
         }
         ripplePaint.shader = null
+        ripplePaint.alpha = 255
 
         if (punchHoles) {
-            occluderSnapshots.forEach { snapshot ->
-                if (snapshot.roundRect) {
-                    canvas.drawRoundRect(
-                        snapshot.left,
-                        snapshot.top,
-                        snapshot.right,
-                        snapshot.bottom,
-                        snapshot.cornerRadius,
-                        snapshot.cornerRadius,
-                        clearPaint
-                    )
-                } else {
-                    canvas.drawRect(snapshot.left, snapshot.top, snapshot.right, snapshot.bottom, clearPaint)
-                }
-            }
             canvas.restoreToCount(saveCount)
         }
 

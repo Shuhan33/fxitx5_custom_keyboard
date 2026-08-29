@@ -7,6 +7,7 @@ package org.fcitx.fcitx5.android
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Binder
 import android.os.IBinder
 import android.os.Process
@@ -103,15 +104,31 @@ class FcitxRemoteService : Service() {
         } else {
             // When disabled: only allow same-signed builds (self-built)
             return try {
-                val mainSig = packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.GET_SIGNING_CERTIFICATES
-                )?.signingInfo?.apkContentsSigners ?: return false
-                val callerSig = packageManager.getPackageInfo(
-                    callingPackage,
-                    PackageManager.GET_SIGNING_CERTIFICATES
-                )?.signingInfo?.apkContentsSigners ?: return false
-                mainSig.contentEquals(callerSig)
+                val mainSig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.GET_SIGNING_CERTIFICATES
+                    ).signingInfo?.apkContentsSigners.orEmpty()
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.GET_SIGNATURES
+                    ).signatures.orEmpty()
+                }
+                val callerSig = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    packageManager.getPackageInfo(
+                        callingPackage,
+                        PackageManager.GET_SIGNING_CERTIFICATES
+                    ).signingInfo?.apkContentsSigners.orEmpty()
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(
+                        callingPackage,
+                        PackageManager.GET_SIGNATURES
+                    ).signatures.orEmpty()
+                }
+                mainSig.isNotEmpty() && callerSig.isNotEmpty() && mainSig.contentEquals(callerSig)
             } catch (e: Exception) {
                 Timber.w(e)
                 false

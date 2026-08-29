@@ -5,6 +5,9 @@
 package org.fcitx.fcitx5.android.input.bar.ui.idle
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.text.TextUtils
 import android.view.View
 import android.widget.ImageView
@@ -15,6 +18,7 @@ import org.fcitx.fcitx5.android.utils.rippleDrawable
 import splitties.dimensions.dp
 import splitties.resources.drawable
 import splitties.views.dsl.constraintlayout.after
+import splitties.views.dsl.constraintlayout.before
 import splitties.views.dsl.constraintlayout.centerInParent
 import splitties.views.dsl.constraintlayout.centerVertically
 import splitties.views.dsl.constraintlayout.constraintLayout
@@ -50,9 +54,20 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
 
     val text = textView {
         isSingleLine = true
-        maxWidth = dp(120)
+        maxWidth = dp(200)
         ellipsize = TextUtils.TruncateAt.END
         setTextColor(theme.altKeyTextColor)
+    }
+
+    val close = imageView {
+        imageDrawable = drawable(R.drawable.ic_baseline_close_24)!!.apply {
+            setTint(theme.altKeyTextColor)
+        }
+        contentDescription = ctx.getString(R.string.dismiss_clipboard_suggestion)
+        isClickable = true
+        isFocusable = true
+        background = rippleDrawable(theme.keyPressHighlightColor)
+        setPadding(dp(4), dp(4), dp(4), dp(4))
     }
 
     private val layout = constraintLayout {
@@ -63,11 +78,15 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
         })
         add(preview, lParams(wrapContent, wrapContent) {
             after(icon, spacing)
-            endOfParent(spacing)
+            before(close, spacing)
             centerVertically()
         })
         add(text, lParams(wrapContent, wrapContent) {
             after(icon, spacing)
+            before(close, spacing)
+            centerVertically()
+        })
+        add(close, lParams(dp(28), dp(28)) {
             endOfParent(spacing)
             centerVertically()
         })
@@ -75,7 +94,20 @@ class ClipboardSuggestionUi(override val ctx: Context, private val theme: Theme)
 
     val suggestionView = CustomGestureView(ctx).apply {
         add(layout, lParams(wrapContent, matchParent))
-        background = rippleDrawable(theme.keyPressHighlightColor)
+        val card = GradientDrawable().apply {
+            setColor(theme.altKeyBackgroundColor)
+            cornerRadius = dp(14).toFloat()
+        }
+        val mask = GradientDrawable().apply {
+            setColor(0xFFFFFFFF.toInt())
+            cornerRadius = dp(14).toFloat()
+        }
+        background = RippleDrawable(
+            ColorStateList.valueOf(theme.keyPressHighlightColor),
+            card,
+            mask
+        )
+        elevation = dp(2).toFloat()
     }
 
     override val root = constraintLayout {

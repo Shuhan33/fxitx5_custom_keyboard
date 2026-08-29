@@ -90,7 +90,7 @@ class PickerLayout(context: Context, theme: Theme, switchKey: KeyDef) :
 
     val strip = view(::RecyclerView) {
         clipToPadding = false
-        overScrollMode = OVER_SCROLL_ALWAYS
+        overScrollMode = OVER_SCROLL_IF_CONTENT_SCROLLS
         itemAnimator = null
         isNestedScrollingEnabled = false
         addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
