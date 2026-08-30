@@ -32,6 +32,7 @@ import com.google.android.material.snackbar.BaseTransientBottomBar.BaseCallback
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.snackbar.SnackbarContentLayout
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.clipboardsync.MainService
@@ -101,7 +102,9 @@ class ClipboardWindow(
     private val clipboardEntryRadius by ThemeManager.prefs.clipboardEntryRadius
 
     private var currentCategory = initialCategory ?: ClipboardCategory.All
+    private var currentQuery = ""
     private var adapterSubmitJob: Job? = null
+    private var searchDebounceJob: Job? = null
 
     private fun resolveInitialCategory(category: ClipboardCategory?): ClipboardCategory {
         category?.let { return it }
@@ -252,13 +255,15 @@ class ClipboardWindow(
         }
     }
 
-    private fun entriesPager(category: ClipboardCategory) = Pager(
+    private fun entriesPager(category: ClipboardCategory, query: String = currentQuery) = Pager(
         PagingConfig(
             pageSize = 16,
             enablePlaceholders = false
         )
     ) {
-        when (category) {
+        if (query.isNotBlank()) {
+            ClipboardManager.searchEntries(query.trim())
+        } else when (category) {
             ClipboardCategory.All -> ClipboardManager.allEntries()
             ClipboardCategory.Favorites -> ClipboardManager.favoriteEntries()
             ClipboardCategory.Local -> ClipboardManager.localTextEntries()
@@ -279,6 +284,15 @@ class ClipboardWindow(
         }
     }
 
+    private fun submitSearch(query: String) {
+        currentQuery = query
+        searchDebounceJob?.cancel()
+        searchDebounceJob = service.lifecycleScope.launch {
+            delay(120L)
+            submitCategory(currentCategory)
+        }
+    }
+
     private val ui by lazy {
         ClipboardUi(context, theme).apply {
             recyclerView.apply {
@@ -288,6 +302,7 @@ class ClipboardWindow(
             }
             setSelectedCategory(currentCategory)
             setOnCategorySelectedListener(::submitCategory)
+            setOnSearchQueryChangedListener(::submitSearch)
             ItemTouchHelper(object : ItemTouchHelper.Callback() {
                 override fun getMovementFlags(
                     recyclerView: RecyclerView,
@@ -469,6 +484,7 @@ class ClipboardWindow(
     }
 
     override fun onDetached() {
+        searchDebounceJob?.cancel()
         clipboardEnabledPref.unregisterOnChangeListener(clipboardEnabledListener)
         adapter.onDetached()
         adapterSubmitJob?.cancel()

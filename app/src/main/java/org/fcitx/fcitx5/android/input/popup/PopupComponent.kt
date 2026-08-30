@@ -151,6 +151,7 @@ class PopupComponent :
     private fun showKeyboard(viewId: Int, keyboard: KeyDef.Popup.Keyboard, bounds: Rect) {
         val keys: Array<String>
         val labels: Array<String>
+        var directCommitKeys: Set<String> = emptySet()
         when (keyboard) {
             is KeyDef.Popup.Keyboard.Preset -> {
                 // Allow overriding via popupPresetJson, with EmojiModifier skin-tone fallback.
@@ -158,10 +159,17 @@ class PopupComponent :
                     ?: PopupPreset[keyboard.label]
                     ?: EmojiModifier.produceSkinTones(keyboard.label, EmojiModifier.SkinTone.Default)
                     ?: return
-                keys = preset
+                // The Chinese period key is sent to fcitx as "." on tap so the engine can
+                // choose the locale-aware punctuation. Long press must bypass that transform
+                // and commit the literal half-width period.
+                keys = if (keyboard.label == "." && "." !in preset) arrayOf(".", *preset) else preset
+                if (keyboard.label == ".") directCommitKeys = setOf(".")
                 labels = if (keyboard.transformPunctuation && punctuation.enabled) {
                     Array(keys.size) { punctuation.transform(keys[it]) }
                 } else keys
+                if (keyboard.label == ".") {
+                    keys.indexOf(".").takeIf { it >= 0 }?.let { labels[it] = "." }
+                }
             }
             is KeyDef.Popup.Keyboard.Explicit -> {
                 keys = keyboard.items
@@ -186,7 +194,8 @@ class PopupComponent :
             // position popup keyboard higher, because of [^1]
             popupHeight + keyBottomMargin,
             keys,
-            labels
+            labels,
+            directCommitKeys
         )
         showPopupContainer(viewId, keyboardUi)
     }

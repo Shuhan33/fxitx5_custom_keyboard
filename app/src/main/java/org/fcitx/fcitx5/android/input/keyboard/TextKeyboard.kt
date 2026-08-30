@@ -1479,6 +1479,7 @@ class TextKeyboard(
     private fun transformPopupPreview(c: String): String {
         if (c.length != 1) return c
         if (c[0].isLetter()) return transformAlphabet(c)
+        if (c == "." && TextKeyboard.ime?.languageCode?.startsWith("zh") == true) return "。"
         return transformPunctuation(c)
     }
 
@@ -1614,9 +1615,15 @@ class TextKeyboard(
     }
 
     private fun updatePunctuationKeys() {
+        val chinese = TextKeyboard.ime?.languageCode?.startsWith("zh") == true
         textKeys.forEach {
             if (it is AltTextKeyView) {
                 it.def as KeyDef.Appearance.AltText
+                it.mainText.text = if (chinese && it.def.character == ".") {
+                    "。"
+                } else {
+                    it.def.displayText
+                }
                 it.altText.text = transformPunctuation(it.def.altText)
             } else {
                 it.def as KeyDef.Appearance.Text

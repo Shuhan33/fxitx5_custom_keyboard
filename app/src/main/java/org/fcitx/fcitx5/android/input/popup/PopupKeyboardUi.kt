@@ -53,7 +53,8 @@ class PopupKeyboardUi(
     private val keyHeight: Int,
     private val popupHeight: Int,
     private val keys: Array<String>,
-    private val labels: Array<String>
+    private val labels: Array<String>,
+    private val directCommitKeys: Set<String> = emptySet()
 ) : PopupContainerUi(ctx, theme, outerBounds, triggerBounds, onDismissSelf) {
 
     class PopupKeyUi(override val ctx: Context, val theme: Theme, val text: String) : Ui {
@@ -224,7 +225,11 @@ class PopupKeyboardUi(
 
     override fun onTrigger(): KeyAction? {
         val key = keys.getOrNull(focusedIndex) ?: return null
-        return KeyAction.FcitxKeyAction(key)
+        return if (key in directCommitKeys) {
+            KeyAction.CommitAction(key)
+        } else {
+            KeyAction.FcitxKeyAction(key)
+        }
     }
 
 }

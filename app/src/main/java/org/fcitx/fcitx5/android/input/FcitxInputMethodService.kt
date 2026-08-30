@@ -53,6 +53,8 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import fcitx5.slei.performance.SleiPerformanceMetrics
+import fcitx5.slei.stats.InputStatsManager
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -61,6 +63,7 @@ import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.core.CapabilityFlags
+import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.FcitxAPI
 import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
@@ -329,9 +332,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         setInputView(newInputView)
         inputDeviceManager.setInputView(newInputView)
         inputView = newInputView
+        val duration = SystemClock.elapsedRealtime() - startedAt
+        SleiPerformanceMetrics.recordReplaceInputView(duration)
         android.util.Log.i(
             "FcitxColdStart",
-            "replaceInputView duration=${SystemClock.elapsedRealtime() - startedAt}ms"
+            "replaceInputView duration=${duration}ms"
         )
         return newInputView
     }
@@ -541,9 +546,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         decorView = window.window!!.decorView
         contentView = decorView.findViewById(android.R.id.content)
         lastKnownConfig = resources.configuration
+        val duration = SystemClock.elapsedRealtime() - startedAt
+        SleiPerformanceMetrics.recordServiceCreate(duration)
         android.util.Log.i(
             "FcitxColdStart",
-            "service.onCreate duration=${SystemClock.elapsedRealtime() - startedAt}ms"
+            "service.onCreate duration=${duration}ms"
         )
     }
 
@@ -764,6 +771,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     fun commitText(text: String, cursor: Int = -1) {
         val ic = currentInputConnection ?: return
+        InputStatsManager.recordCommit(
+            text = text,
+            sensitive = capabilityFlags.has(CapabilityFlag.Password) ||
+                capabilityFlags.has(CapabilityFlag.Sensitive)
+        )
         // when composing text equals commit content, finish composing text as-is
         if (composing.isNotEmpty() && composingText.toString() == text) {
             val c = if (cursor == -1) text.length else cursor
@@ -990,6 +1002,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        SleiPerformanceMetrics.markWindowShown()
         highlightColor =
             styledColorOrDefault(android.R.attr.colorAccent, DefaultHighlightColor).alpha(0.4f)
         InputFeedbacks.syncSystemPrefs()
@@ -1000,9 +1013,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val startedAt = SystemClock.elapsedRealtime()
         android.util.Log.i("FcitxColdStart", "service.onCreateInputView begin")
         replaceInputViews(ThemeManager.activeTheme)
+        val duration = SystemClock.elapsedRealtime() - startedAt
+        SleiPerformanceMetrics.recordInputViewCreate(duration)
         android.util.Log.i(
             "FcitxColdStart",
-            "service.onCreateInputView duration=${SystemClock.elapsedRealtime() - startedAt}ms"
+            "service.onCreateInputView duration=${duration}ms"
         )
         // We will call `setInputView` by ourselves. This is fine.
         return null
@@ -1486,10 +1501,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo, restarting: Boolean) {
         android.util.Log.i("FcitxColdStart", "service.onStartInput restarting=$restarting")
+        SleiPerformanceMetrics.markInputRequested()
         isInInputLifecycleCriticalPhase = true
         try {
             val inputSessionGeneration = ++this.inputSessionGeneration
-            MainService.startSyncService(this, "ime-start-input", imeSyncActive = true)
             selection.resetTo(attribute.initialSelStart, attribute.initialSelEnd)
             resetComposingState()
             val flags = CapabilityFlags.fromEditorInfo(attribute)
@@ -1520,8 +1535,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         try {
             val inputSessionGeneration = this.inputSessionGeneration
             Timber.d("onStartInputView: restarting=$restarting")
-            MainService.startSyncService(this, "ime-start-input-view", imeSyncActive = true)
-            ensurePreferredVoiceInputProviderAvailable()
             if (org.fcitx.fcitx5.android.input.font.FontProviders.needsRefresh()) {
                 refreshViewsForFontChange()
             }
@@ -1549,6 +1562,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             contentView.post {
                 isInInputLifecycleCriticalPhase = false
                 applyPendingThemeIfPossible()
+                MainService.startSyncService(this, "ime-window-ready", imeSyncActive = true)
+                ensurePreferredVoiceInputProviderAvailable()
             }
             updateStatusIcon()
         }

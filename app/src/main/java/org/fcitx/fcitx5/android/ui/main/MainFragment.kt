@@ -111,6 +111,11 @@ class MainFragment : PaddingPreferenceFragment() {
                     SettingsRoute.Clipboard
                 )
                 addDestinationPreference(
+                    R.string.slei_data_and_stats,
+                    R.drawable.ic_baseline_list_alt_24,
+                    SettingsRoute.SleiData
+                )
+                addDestinationPreference(
                     R.string.emoji_and_symbols,
                     R.drawable.ic_baseline_emoji_symbols_24,
                     SettingsRoute.Symbol

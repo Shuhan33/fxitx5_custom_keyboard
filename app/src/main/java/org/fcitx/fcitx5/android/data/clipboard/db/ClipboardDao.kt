@@ -35,6 +35,13 @@ interface ClipboardDao {
     @Query("SELECT * FROM ${ClipboardEntry.TABLE_NAME} WHERE deleted=0 ORDER BY pinned DESC, timestamp DESC")
     fun allEntries(): PagingSource<Int, ClipboardEntry>
 
+    @Query(
+        "SELECT * FROM ${ClipboardEntry.TABLE_NAME} " +
+                "WHERE deleted=0 AND text LIKE :query ESCAPE '\\' " +
+                "ORDER BY pinned DESC, timestamp DESC"
+    )
+    fun searchEntries(query: String): PagingSource<Int, ClipboardEntry>
+
     @Query("SELECT * FROM ${ClipboardEntry.TABLE_NAME} WHERE pinned=1 AND deleted=0 ORDER BY timestamp DESC")
     fun favoriteEntries(): PagingSource<Int, ClipboardEntry>
 

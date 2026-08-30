@@ -11,10 +11,13 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.view.View
 import android.widget.HorizontalScrollView
+import android.widget.EditText
+import android.text.InputType
 import android.widget.LinearLayout
 import android.widget.ViewAnimator
 import androidx.transition.Fade
 import androidx.transition.TransitionManager
+import androidx.core.widget.doOnTextChanged
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardCategory
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
@@ -79,6 +82,20 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         }, lParams(wrapContent, matchParent))
     }
 
+    val searchField = view(::EditText) {
+        hint = ctx.getString(R.string.clipboard_search_hint)
+        textSize = 14f
+        isSingleLine = true
+        inputType = InputType.TYPE_CLASS_TEXT
+        setTextColor(theme.keyTextColor)
+        setHintTextColor(theme.popupTextColor)
+        setPaddingDp(14, 0, 14, 0)
+        background = GradientDrawable().apply {
+            cornerRadius = ctx.dp(14).toFloat()
+            setColor(theme.keyBackgroundColor)
+        }
+    }
+
     private val keyBorder by ThemeManager.prefs.keyBorder
     private val disableAnimation by AppPrefs.getInstance().advanced.disableAnimation
 
@@ -87,6 +104,14 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
             backgroundColor = theme.barColor
         }
         add(verticalLayout {
+            add(
+                searchField,
+                LinearLayout.LayoutParams(matchParent, dp(36)).apply {
+                    leftMargin = dp(10)
+                    rightMargin = dp(10)
+                    topMargin = dp(6)
+                }
+            )
             add(categoryBar, LinearLayout.LayoutParams(matchParent, LinearLayout.LayoutParams.WRAP_CONTENT))
             add(
                 viewAnimator,
@@ -136,6 +161,10 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
                 listener(category)
             }
         }
+    }
+
+    fun setOnSearchQueryChangedListener(listener: (String) -> Unit) {
+        searchField.doOnTextChanged { text, _, _, _ -> listener(text?.toString().orEmpty()) }
     }
 
     fun setSelectedCategory(category: ClipboardCategory) {

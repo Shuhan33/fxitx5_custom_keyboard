@@ -13,6 +13,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
 import android.os.Process
+import fcitx5.slei.stats.InputStatsManager
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
@@ -192,6 +193,7 @@ class FcitxApplication : Application() {
             setValue(currentPid)
         }
         ClipboardManager.init(ctx)
+        InputStatsManager.init(ctx)
         ThemeManager.init(resources.configuration)
         if (!isDirectBootMode) {
             UserConfigFiles.seedBundledDefaultsIfMissing()
