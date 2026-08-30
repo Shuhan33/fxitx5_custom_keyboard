@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxAPI
+import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.broadcast.PreeditEmptyStateComponent
@@ -133,8 +134,22 @@ class CommonKeyActionListener :
                 is FcitxKeyAction -> service.postFcitxJob {
                     sendKey(action.act, action.states.states, action.code, action.up)
                 }
-                is SymAction -> service.postFcitxJob {
-                    sendKey(action.sym, action.states)
+                is SymAction -> {
+                    // Prediction candidates have no preedit. Fcitx consumes Backspace to dismiss
+                    // that list, which previously meant the editor never received the deletion.
+                    // Capture the state before dispatch: normal composition Backspace must remain
+                    // owned by Fcitx, while prediction Backspace dismisses suggestions and deletes
+                    // one character from the editor in the same user action.
+                    val deleteAfterDismissingPrediction =
+                        action.sym.sym == FcitxKeyMapping.FcitxKey_BackSpace &&
+                            preeditState.isEmpty &&
+                            horizontalCandidate.adapter.itemCount > 0
+                    service.postFcitxJob {
+                        sendKey(action.sym, action.states)
+                        if (deleteAfterDismissingPrediction) {
+                            service.lifecycleScope.launch { service.handleBackspaceDirectly() }
+                        }
+                    }
                 }
                 is CommitAction -> {
                     val composing =

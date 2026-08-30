@@ -25,12 +25,13 @@ import java.util.Locale
 
 @Serializable
 data class InputStatsData(
-    val formatVersion: Int = 2,
+    val formatVersion: Int = 3,
     val totalCharacters: Long = 0,
     val totalCommits: Long = 0,
     val phraseFrequency: Map<String, Long> = emptyMap(),
     val dailyCharacters: Map<String, Long> = emptyMap(),
     val weeklyPhraseFrequency: Map<String, Map<String, Long>> = emptyMap(),
+    val hiddenPhrases: Set<String> = emptySet(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -69,7 +70,9 @@ object InputStatsManager {
                     .replace(Regex("\\s+"), " ")
                     .takeIf { it.length in 2..40 && it.any(Char::isLetterOrDigit) }
                 val phrases = data.phraseFrequency.toMutableMap()
-                if (phrase != null) phrases[phrase] = (phrases[phrase] ?: 0L) + 1L
+                if (phrase != null && phrase !in data.hiddenPhrases) {
+                    phrases[phrase] = (phrases[phrase] ?: 0L) + 1L
+                }
                 if (phrases.size > MAX_PHRASES) {
                     phrases.entries.sortedByDescending { it.value }
                         .drop(MAX_PHRASES_TO_KEEP)
@@ -81,7 +84,7 @@ object InputStatsManager {
                 daily[today] = (daily[today] ?: 0L) + characterCount
                 val weekly = data.weeklyPhraseFrequency
                     .mapValuesTo(mutableMapOf()) { (_, values) -> values.toMutableMap() }
-                if (phrase != null) {
+                if (phrase != null && phrase !in data.hiddenPhrases) {
                     val weekPhrases = weekly.getOrPut(currentWeek) { mutableMapOf() }
                     weekPhrases[phrase] = (weekPhrases[phrase] ?: 0L) + 1L
                 }
@@ -130,13 +133,18 @@ object InputStatsManager {
                     val target = weekly.getOrPut(week) { mutableMapOf() }
                     values.forEach { (phrase, value) -> target[phrase] = (target[phrase] ?: 0L) + value }
                 }
+                val hidden = data.hiddenPhrases + imported.hiddenPhrases
                 InputStatsData(
                     totalCharacters = data.totalCharacters + imported.totalCharacters,
                     totalCommits = data.totalCommits + imported.totalCommits,
-                    phraseFrequency = phrases.entries.sortedByDescending { it.value }.take(MAX_PHRASES_TO_KEEP)
+                    phraseFrequency = phrases.filterKeys { it !in hidden }.entries
+                        .sortedByDescending { it.value }.take(MAX_PHRASES_TO_KEEP)
                         .associate { it.key to it.value },
                     dailyCharacters = daily,
-                    weeklyPhraseFrequency = weekly
+                    weeklyPhraseFrequency = weekly.mapValues { (_, values) ->
+                        values.filterKeys { it !in hidden }
+                    },
+                    hiddenPhrases = hidden
                 )
             }
             pruneWeeklyDetailsLocked()
@@ -155,10 +163,29 @@ object InputStatsManager {
                 )
                 ClearMode.Phrases -> data.copy(
                     phraseFrequency = emptyMap(),
-                    weeklyPhraseFrequency = emptyMap()
+                    weeklyPhraseFrequency = emptyMap(),
+                    hiddenPhrases = emptySet()
                 )
                 ClearMode.All -> InputStatsData()
             }.copy(updatedAt = System.currentTimeMillis())
+            writeLocked()
+        }
+    }
+
+    /** Permanently omit a phrase from overall and weekly rankings. */
+    suspend fun hidePhrase(phrase: String) = withContext(Dispatchers.IO) {
+        val normalized = phrase.trim()
+        if (normalized.isEmpty()) return@withContext
+        mutex.withLock {
+            ensureLoadedLocked()
+            data = data.copy(
+                phraseFrequency = data.phraseFrequency - normalized,
+                weeklyPhraseFrequency = data.weeklyPhraseFrequency.mapValues { (_, phrases) ->
+                    phrases - normalized
+                },
+                hiddenPhrases = data.hiddenPhrases + normalized,
+                updatedAt = System.currentTimeMillis()
+            )
             writeLocked()
         }
     }
@@ -179,12 +206,14 @@ object InputStatsManager {
         val retainedWeeks = (0 until RETAINED_WEEK_COUNT).map(::weekStartKey).toSet()
         val oldestDay = retainedWeeks.minOrNull().orEmpty()
         data = data.copy(
-            formatVersion = 2,
+            formatVersion = 3,
+            phraseFrequency = data.phraseFrequency.filterKeys { it !in data.hiddenPhrases },
             dailyCharacters = data.dailyCharacters.filterKeys { it >= oldestDay },
             weeklyPhraseFrequency = data.weeklyPhraseFrequency
                 .filterKeys { it in retainedWeeks }
                 .mapValues { (_, phrases) ->
-                    phrases.entries.sortedByDescending { it.value }.take(MAX_WEEKLY_PHRASES)
+                    phrases.filterKeys { it !in data.hiddenPhrases }.entries
+                        .sortedByDescending { it.value }.take(MAX_WEEKLY_PHRASES)
                         .associate { it.key to it.value }
                 }
         )

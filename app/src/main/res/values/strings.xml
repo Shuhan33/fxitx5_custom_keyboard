@@ -882,6 +882,11 @@
     <string name="slei_stats_overview_summary">累计 %1$d 字 · %2$d 次提交 · 今日 %3$d 字</string>
     <string name="slei_stats_top_phrases">最常用词句</string>
     <string name="slei_stats_empty">还没有统计数据</string>
+    <string name="slei_stats_manage_hint">点击管理；长按词句可从排行榜隐藏</string>
+    <string name="slei_stats_manage_phrases">管理常用词句</string>
+    <string name="slei_stats_hide_phrase_confirm">不再在统计榜单显示“%1$s”？</string>
+    <string name="slei_stats_hide">隐藏记录</string>
+    <string name="slei_stats_phrase_hidden">已从统计榜单隐藏</string>
     <string name="slei_stats_export">导出统计数据</string>
     <string name="slei_stats_import">导入统计数据</string>
     <string name="slei_stats_merge">合并现有数据</string>

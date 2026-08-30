@@ -7,6 +7,10 @@ package fcitx5.slei.ui
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -75,7 +79,11 @@ class SleiDataFragment : PaddingPreferenceFragment() {
                 }.also { addPreference(it) }
                 topPhrasesPreference = Preference(context).apply {
                     title = getString(R.string.slei_stats_top_phrases)
-                    isSelectable = false
+                    summary = getString(R.string.slei_stats_manage_hint)
+                    setOnPreferenceClickListener {
+                        showPhraseManager()
+                        true
+                    }
                 }.also { addPreference(it) }
                 addPreference(R.string.slei_weekly_report, R.string.slei_weekly_report_summary) {
                     navigateWithAnim(SettingsRoute.SleiWeeklyReport)
@@ -193,6 +201,60 @@ class SleiDataFragment : PaddingPreferenceFragment() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun showPhraseManager() {
+        lifecycleScope.launch {
+            val phrases = InputStatsManager.snapshot().phraseFrequency.entries
+                .sortedByDescending { it.value }
+                .take(50)
+            if (phrases.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.slei_stats_empty, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val density = resources.displayMetrics.density
+            val content = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                val horizontal = (20 * density).toInt()
+                val vertical = (6 * density).toInt()
+                setPadding(horizontal, vertical, horizontal, vertical)
+            }
+            val dialog = AlertDialog.Builder(requireContext())
+                .setTitle(R.string.slei_stats_manage_phrases)
+                .setView(ScrollView(requireContext()).apply { addView(content) })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create()
+            phrases.forEach { entry ->
+                content.addView(TextView(requireContext()).apply {
+                    text = "${entry.key}  ·  ${entry.value}"
+                    textSize = 17f
+                    setPadding(0, (12 * density).toInt(), 0, (12 * density).toInt())
+                    setOnLongClickListener {
+                        AlertDialog.Builder(requireContext())
+                            .setMessage(getString(R.string.slei_stats_hide_phrase_confirm, entry.key))
+                            .setPositiveButton(R.string.slei_stats_hide) { _, _ ->
+                                lifecycleScope.launch {
+                                    InputStatsManager.hidePhrase(entry.key)
+                                    dialog.dismiss()
+                                    refreshStats()
+                                    Toast.makeText(
+                                        requireContext(),
+                                        R.string.slei_stats_phrase_hidden,
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .show()
+                        true
+                    }
+                }, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+            }
+            dialog.show()
+        }
     }
 
     private fun selectedTreeUri(): Uri? = prefs.getString(BACKUP_TREE_KEY, null)?.let(Uri::parse)
