@@ -1,8 +1,21 @@
 diff --git a/im/pinyin/pinyin.cpp b/im/pinyin/pinyin.cpp
-index 513a8d4..5683307 100644
+index 513a8d4..5b25416 100644
 --- a/im/pinyin/pinyin.cpp
 +++ b/im/pinyin/pinyin.cpp
-@@ -545,15 +545,47 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
+@@ -1,8 +1,12 @@
+ /*
+  * SPDX-FileCopyrightText: 2017-2017 CSSlayer <wengxt@gmail.com>
++ * SPDX-FileCopyrightText: Copyright 2026 Shuhan Lei
+  *
+  * SPDX-License-Identifier: LGPL-2.1-or-later
+  *
++ * Modified by Shuhan Lei on 2026-08-29 and 2026-08-30:
++ * tune English candidates, fuzzy phrases, and pinyin usability.
++ *
+  */
+ 
+ #include "pinyin.h"
+@@ -545,15 +549,47 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
              selectedLength <= context.cursor()) {
              auto [hasUpper, engNess] =
                  englishNess(parsedPy, context.useShuangpin());
@@ -53,7 +66,7 @@ index 513a8d4..5683307 100644
  
                  // Our hint doesn't work well with mixed case, so, always put a
                  // word as is.
-@@ -1175,6 +1207,16 @@ void PinyinEngine::populateConfig() {
+@@ -1175,6 +1211,16 @@ void PinyinEngine::populateConfig() {
                                 ? libime::PinyinDictFlag::NoFlag
                                 : libime::PinyinDictFlag::Disabled);
  

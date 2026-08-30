@@ -1,3 +1,10 @@
+<!--
+ SPDX-License-Identifier: LGPL-2.1-or-later
+ SPDX-FileCopyrightText: Copyright 2026 Shuhan Lei
+
+ This simple cross glyph was drawn for the slei keyboard and does not reuse
+ the former Material Icons path data.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
@@ -5,5 +12,8 @@
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M18.3,5.71L12,12l6.3,6.29 -1.41,1.42L10.59,13.41 4.29,19.71 2.88,18.29 9.17,12 2.88,5.71 4.29,4.29 10.59,10.59 16.89,4.29z" />
+        android:pathData="M6.4,7.8L7.8,6.4L17.6,16.2L16.2,17.6Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M16.2,6.4L17.6,7.8L7.8,17.6L6.4,16.2Z" />
 </vector>

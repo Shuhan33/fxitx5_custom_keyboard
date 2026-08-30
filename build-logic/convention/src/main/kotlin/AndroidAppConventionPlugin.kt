@@ -157,7 +157,7 @@ class AndroidAppConventionPlugin : AndroidBaseConventionPlugin() {
             }
             export {
                 excludeFields.set(
-                    setOf("generated", "developers", "organization", "scm", "funding", "content")
+                    setOf("generated", "developers", "organization", "scm", "funding")
                 )
             }
         }

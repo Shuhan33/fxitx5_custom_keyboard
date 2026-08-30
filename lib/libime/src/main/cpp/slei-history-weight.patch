@@ -1,8 +1,19 @@
 diff --git a/src/libime/core/constants.h b/src/libime/core/constants.h
-index e99f08e..b4a5ae8 100644
+index e99f08e..fc42688 100644
 --- a/src/libime/core/constants.h
 +++ b/src/libime/core/constants.h
-@@ -15,7 +15,7 @@ constexpr float DEFAULT_LANGUAGE_MODEL_UNKNOWN_PROBABILITY_PENALTY =
+@@ -1,7 +1,10 @@
+ /*
+  * SPDX-FileCopyrightText: 2017-2017 CSSlayer <wengxt@gmail.com>
++ * SPDX-FileCopyrightText: Copyright 2026 Shuhan Lei
+  *
+  * SPDX-License-Identifier: LGPL-2.1-or-later
++ *
++ * Modified by Shuhan Lei on 2026-08-29: adjust the default user-history weight.
+  */
+ #ifndef _FCITX_LIBIME_CORE_CONSTANTS_H_
+ #define _FCITX_LIBIME_CORE_CONSTANTS_H_
+@@ -15,7 +18,7 @@ constexpr float DEFAULT_LANGUAGE_MODEL_UNKNOWN_PROBABILITY_PENALTY =
  // -38... is log10(2^-127)
  constexpr float HISTORY_BIGRAM_ALPHA_VALUE = 1.0F;
  constexpr float MIN_FLOAT_LOG10 = -38.23080944932561;
@@ -12,10 +23,21 @@ index e99f08e..b4a5ae8 100644
  
  #endif // _FCITX_LIBIME_CORE_CONSTANTS_H_
 diff --git a/src/libime/core/userlanguagemodel.cpp b/src/libime/core/userlanguagemodel.cpp
-index 64fd30c..bdf6896 100644
+index 64fd30c..431c5c6 100644
 --- a/src/libime/core/userlanguagemodel.cpp
 +++ b/src/libime/core/userlanguagemodel.cpp
-@@ -8,6 +8,7 @@
+@@ -1,13 +1,18 @@
+ /*
+  * SPDX-FileCopyrightText: 2017-2017 CSSlayer <wengxt@gmail.com>
++ * SPDX-FileCopyrightText: Copyright 2026 Shuhan Lei
+  *
+  * SPDX-License-Identifier: LGPL-2.1-or-later
++ *
++ * Modified by Shuhan Lei on 2026-08-29 and 2026-08-30:
++ * add frequency-based, user-configurable history weighting.
+  */
+ 
+ #include "userlanguagemodel.h"
  #include <algorithm>
  #include <cassert>
  #include <cmath>
@@ -23,7 +45,7 @@ index 64fd30c..bdf6896 100644
  #include <istream>
  #include <iterator>
  #include <memory>
-@@ -19,12 +20,32 @@
+@@ -19,12 +24,32 @@
  #include <fcitx-utils/macros.h>
  #include "constants.h"
  #include "historybigram.h"
@@ -56,7 +78,7 @@ index 64fd30c..bdf6896 100644
  class UserLanguageModelPrivate {
  public:
      State beginState_;
-@@ -136,7 +157,14 @@ float UserLanguageModel::score(const State &state, const WordNode &word,
+@@ -136,7 +161,14 @@ float UserLanguageModel::score(const State &state, const WordNode &word,
          userScore = d->history_.score(prev, &word);
      }
      d->setWordToState(out, &word);

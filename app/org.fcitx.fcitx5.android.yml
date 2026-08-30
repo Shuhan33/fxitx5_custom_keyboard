@@ -1,3 +1,5 @@
+# Upstream F-Droid build recipe retained for reference. It does not describe
+# the custom org.fcitx5.slei.android.fx package or its GitHub releases.
 Categories:
   - System
 License: LGPL-2.1-only

@@ -154,7 +154,9 @@ app/build/outputs/apk/fx/release/
 
 ## 开源与上游
 
-本项目保留 Fcitx5、Fcitx5 for Android、libime 及其他依赖项目的原作者信息和许可证。本仓库中的修改继续按照项目现有的 `LGPL-2.1-or-later` 许可证发布。
+本项目保留 Fcitx5、Fcitx5 for Android、libime 及其他依赖项目的原作者信息、Git 历史和许可证。Shuhan Lei 的定制修改不会取代或重新声明上游作者的版权。本仓库原创修改继续按照 `LGPL-2.1-or-later` 发布；第三方代码、插件、词库和资源继续遵循各自文件中声明的许可证。
+
+本仓库目前是保留完整上游历史的独立 GitHub 仓库，不属于 GitHub 的 Fork 网络。仓库是否显示为 Fork 不影响开源许可效力；源码来源、作者记录、许可证和修改声明均继续保留。更完整的组件与修改说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。APK 内置 LGPL 2.1 正文，可在离线状态下从“关于 → 许可”查看。
 
 特别感谢 [fxliang/fcitx5-android](https://github.com/fxliang/fcitx5-android) 的工作；该项目同样是本定制版的重要上游与实现参考。
 
@@ -162,6 +164,8 @@ app/build/outputs/apk/fx/release/
 - Android 上游：<https://github.com/fcitx5-android/fcitx5-android>
 - fxliang 上游：<https://github.com/fxliang/fcitx5-android>
 - Fcitx5：<https://github.com/fcitx/fcitx5>
+
+Xime 使用 GPLv3，本项目没有复制、链接或捆绑 Xime 源码。我们只会研究通用交互与性能思想，并在现有 Fcitx 架构上独立实现。
 
 ## 源码命名空间
 

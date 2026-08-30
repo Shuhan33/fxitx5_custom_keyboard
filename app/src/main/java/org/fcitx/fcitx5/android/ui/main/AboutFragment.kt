@@ -4,6 +4,7 @@
  */
 package org.fcitx.fcitx5.android.ui.main
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -42,7 +43,7 @@ class AboutFragment : PaddingPreferenceFragment() {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.githubRepo)))
             }
             addPreference(R.string.license, Const.licenseSpdxId) {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.licenseUrl)))
+                showBundledMainLicense()
             }
             addCategory(R.string.version) {
                 isIconSpaceReserved = false
@@ -65,6 +66,18 @@ class AboutFragment : PaddingPreferenceFragment() {
                 addPreference(R.string.build_time, formatDateTime(BuildConfig.BUILD_TIME))
             }
         }
+    }
+
+    private fun showBundledMainLicense(): Boolean {
+        val text = requireContext().assets.open("licenses/LGPL-2.1.txt")
+            .bufferedReader()
+            .use { it.readText() }
+        AlertDialog.Builder(requireContext())
+            .setTitle(Const.licenseSpdxId)
+            .setMessage(text)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+        return true
     }
 
     override fun onResume() {

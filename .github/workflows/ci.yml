@@ -42,6 +42,16 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Verify license bundle and modification notices
+        shell: bash
+        run: |
+          cmp LICENSE app/src/main/assets/licenses/LGPL-2.1.txt
+          test -s THIRD_PARTY_NOTICES.md
+          grep -q "2017-2017 CSSlayer" lib/fcitx5-chinese-addons/src/main/cpp/slei-pinyin.patch
+          grep -q "Modified by Shuhan Lei" lib/fcitx5-chinese-addons/src/main/cpp/slei-pinyin.patch
+          grep -q "2017-2017 CSSlayer" lib/libime/src/main/cpp/slei-history-weight.patch
+          grep -q "Modified by Shuhan Lei" lib/libime/src/main/cpp/slei-history-weight.patch
+
       - name: Fetch upstream tags
         run: |
           git remote add upstream https://github.com/fcitx5-android/fcitx5-android.git || true
@@ -212,4 +222,6 @@ jobs:
           prerelease: true
           files: |
             final-release/*.apk
+            LICENSE
+            THIRD_PARTY_NOTICES.md
 

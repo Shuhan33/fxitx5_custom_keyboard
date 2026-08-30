@@ -63,7 +63,23 @@ class LicensesFragment : PaddingPreferenceFragment() {
     }
 
     private fun showLicenseContent(license: License) {
-        if (license.url?.isNotBlank() == true) {
+        val content = license.licenseContent
+        if (!content.isNullOrBlank()) {
+            AlertDialog.Builder(requireContext())
+                .setTitle(license.spdxId ?: license.name)
+                .setMessage(content)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        } else if (license.spdxId == "LGPL-2.1-or-later") {
+            val bundled = requireContext().assets.open("licenses/LGPL-2.1.txt")
+                .bufferedReader()
+                .use { it.readText() }
+            AlertDialog.Builder(requireContext())
+                .setTitle(license.spdxId)
+                .setMessage(bundled)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        } else if (license.url?.isNotBlank() == true) {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(license.url)))
         }
     }
