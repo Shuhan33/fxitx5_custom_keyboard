@@ -152,6 +152,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private lateinit var contentView: FrameLayout
     internal var inputView: InputView? = null
     internal var candidatesView: CandidatesView? = null
+    private data class PreparedViews(
+        val theme: Theme,
+        val inputView: InputView,
+        val candidatesView: CandidatesView
+    )
+    private var preparedViews: PreparedViews? = null
 
     private val navbarMgr = NavigationBarManager()
     internal val inputDeviceManager = InputDeviceManager(
@@ -326,9 +332,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
     }
 
-    private fun replaceInputView(theme: Theme): InputView {
+    private fun replaceInputView(theme: Theme, prepared: InputView? = null): InputView {
         val startedAt = SystemClock.elapsedRealtime()
-        val newInputView = InputView(this, fcitx, theme)
+        val newInputView = prepared ?: InputView(this, fcitx, theme)
         setInputView(newInputView)
         inputDeviceManager.setInputView(newInputView)
         inputView = newInputView
@@ -341,8 +347,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         return newInputView
     }
 
-    private fun replaceCandidateView(theme: Theme): CandidatesView {
-        val newCandidatesView = CandidatesView(this, fcitx, theme)
+    private fun replaceCandidateView(theme: Theme, prepared: CandidatesView? = null): CandidatesView {
+        val newCandidatesView = prepared ?: CandidatesView(this, fcitx, theme)
         // replace CandidatesView manually
         contentView.removeView(candidatesView)
         // put CandidatesView directly under content view
@@ -353,22 +359,26 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         return newCandidatesView
     }
 
-    private fun refreshViewsForFontChange() {
-        val theme = ThemeManager.activeTheme
-        inputView?.let {
-            replaceInputView(theme)
-        }
-        candidatesView?.let {
-            replaceCandidateView(theme)
-        }
-    }
-
     private fun replaceInputViews(theme: Theme) {
+        val prepared = preparedViews?.takeIf { it.theme === theme }
+        preparedViews = null
         window.window?.let {
             navbarMgr.evaluate(it, inputDeviceManager.isVirtualKeyboard)
         }
-        replaceInputView(theme)
-        replaceCandidateView(theme)
+        replaceInputView(theme, prepared?.inputView)
+        replaceCandidateView(theme, prepared?.candidatesView)
+    }
+
+    private fun prewarmInputViews() {
+        if (preparedViews != null || inputView != null || candidatesView != null) return
+        val theme = ThemeManager.activeTheme
+        val startedAt = SystemClock.elapsedRealtime()
+        val input = InputView(this, fcitx, theme)
+        val candidates = CandidatesView(this, fcitx, theme)
+        preparedViews = PreparedViews(theme, input, candidates)
+        val duration = SystemClock.elapsedRealtime() - startedAt
+        SleiPerformanceMetrics.recordViewPrewarm(duration)
+        android.util.Log.i("FcitxColdStart", "idle view prewarm duration=${duration}ms")
     }
 
     /**
@@ -552,6 +562,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             "FcitxColdStart",
             "service.onCreate duration=${duration}ms"
         )
+        // InputMethodService is commonly created well before the first text field is tapped.
+        // Spend that idle window constructing the expensive key hierarchy so onCreateInputView
+        // only attaches already-built views. This stays on the main thread because Android View
+        // objects must never be created from a worker thread.
+        contentView.post(::prewarmInputViews)
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -1535,9 +1550,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         try {
             val inputSessionGeneration = this.inputSessionGeneration
             Timber.d("onStartInputView: restarting=$restarting")
-            if (org.fcitx.fcitx5.android.input.font.FontProviders.needsRefresh()) {
-                refreshViewsForFontChange()
-            }
             postFcitxSessionJob(inputSessionGeneration) {
                 focus(true)
                 // Keep paged candidate mode enabled so candidate cursor/highlight is available.

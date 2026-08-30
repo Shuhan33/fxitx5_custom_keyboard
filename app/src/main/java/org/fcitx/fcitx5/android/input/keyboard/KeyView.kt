@@ -80,6 +80,7 @@ abstract class KeyView(
     val vMargin: Int
     protected val cornerLabelHorizontalSafeInset: Int
     protected val cornerLabelTopSafeInset: Int
+    private val specialKeyOvalShapeEnabled: Boolean
 
     init {
         val prefs = ThemeManager.prefs
@@ -98,6 +99,7 @@ abstract class KeyView(
         vMargin = if (def.margin) dp(vMarginPref.getValue()) else 0
         cornerLabelHorizontalSafeInset = dp(3)
         cornerLabelTopSafeInset = dp(1)
+        specialKeyOvalShapeEnabled = prefs.specialKeyOvalShape.getValue()
     }
 
     private val cachedLocation = intArrayOf(0, 0)
@@ -140,8 +142,9 @@ abstract class KeyView(
     }
 
     init {
-        // trigger setEnabled(true)
-        isEnabled = true
+        // View is enabled by default. Calling the overridden setter here resolved the same
+        // disabledAlpha theme attribute once per key during cold start.
+        appearanceView.alpha = 1f
         isClickable = true
         isHapticFeedbackEnabled = false
         if (def.viewId > 0) {
@@ -225,7 +228,7 @@ abstract class KeyView(
         Variant.Accent -> theme.accentKeyBackgroundColor
     }
 
-    private fun usesPillShape(): Boolean = ThemeManager.prefs.specialKeyOvalShape.getValue() && when (def.viewId) {
+    private fun usesPillShape(): Boolean = specialKeyOvalShapeEnabled && when (def.viewId) {
         R.id.button_return, R.id.button_layout_switch -> true
         else -> false
     }
@@ -372,7 +375,6 @@ abstract class KeyView(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val specialKeyOvalShapeEnabled = ThemeManager.prefs.specialKeyOvalShape.getValue()
         when (def.viewId) {
             R.id.button_space -> {
                 if (bordered) return

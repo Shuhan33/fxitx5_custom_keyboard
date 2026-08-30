@@ -81,6 +81,18 @@ object FontProviders {
         needsRefresh = true
     }
 
+    /**
+     * Release reloadable font metadata under memory pressure without invalidating the
+     * keyboard hierarchy. Existing TextViews retain their Typeface references, so rebuilding
+     * every key when the IME window becomes hidden only creates long main-thread stalls.
+     */
+    fun trimMemory() {
+        provider.clearCache()
+        synchronized(fontSizeResultCache) {
+            fontSizeResultCache.clear()
+        }
+    }
+
     val fontTypefaceMap: MutableMap<String, Typeface?>
         get() = provider.fontTypefaceMap
 

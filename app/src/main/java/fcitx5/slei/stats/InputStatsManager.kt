@@ -25,11 +25,12 @@ import java.util.Locale
 
 @Serializable
 data class InputStatsData(
-    val formatVersion: Int = 1,
+    val formatVersion: Int = 2,
     val totalCharacters: Long = 0,
     val totalCommits: Long = 0,
     val phraseFrequency: Map<String, Long> = emptyMap(),
     val dailyCharacters: Map<String, Long> = emptyMap(),
+    val weeklyPhraseFrequency: Map<String, Map<String, Long>> = emptyMap(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -75,16 +76,24 @@ object InputStatsManager {
                         .forEach { phrases.remove(it.key) }
                 }
                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+                val currentWeek = weekStartKey()
                 val daily = data.dailyCharacters.toMutableMap()
                 daily[today] = (daily[today] ?: 0L) + characterCount
+                val weekly = data.weeklyPhraseFrequency
+                    .mapValuesTo(mutableMapOf()) { (_, values) -> values.toMutableMap() }
+                if (phrase != null) {
+                    val weekPhrases = weekly.getOrPut(currentWeek) { mutableMapOf() }
+                    weekPhrases[phrase] = (weekPhrases[phrase] ?: 0L) + 1L
+                }
                 data = data.copy(
                     totalCharacters = data.totalCharacters + characterCount,
                     totalCommits = data.totalCommits + 1L,
                     phraseFrequency = phrases,
-                    dailyCharacters = daily.entries.sortedByDescending { it.key }.take(400)
-                        .associate { it.key to it.value },
+                    dailyCharacters = daily,
+                    weeklyPhraseFrequency = weekly,
                     updatedAt = System.currentTimeMillis()
                 )
+                pruneWeeklyDetailsLocked()
                 scheduleFlushLocked()
             }
         }
@@ -115,15 +124,22 @@ object InputStatsManager {
                 imported.phraseFrequency.forEach { (key, value) -> phrases[key] = (phrases[key] ?: 0L) + value }
                 val daily = data.dailyCharacters.toMutableMap()
                 imported.dailyCharacters.forEach { (key, value) -> daily[key] = (daily[key] ?: 0L) + value }
+                val weekly = data.weeklyPhraseFrequency
+                    .mapValuesTo(mutableMapOf()) { (_, values) -> values.toMutableMap() }
+                imported.weeklyPhraseFrequency.forEach { (week, values) ->
+                    val target = weekly.getOrPut(week) { mutableMapOf() }
+                    values.forEach { (phrase, value) -> target[phrase] = (target[phrase] ?: 0L) + value }
+                }
                 InputStatsData(
                     totalCharacters = data.totalCharacters + imported.totalCharacters,
                     totalCommits = data.totalCommits + imported.totalCommits,
                     phraseFrequency = phrases.entries.sortedByDescending { it.value }.take(MAX_PHRASES_TO_KEEP)
                         .associate { it.key to it.value },
-                    dailyCharacters = daily.entries.sortedByDescending { it.key }.take(400)
-                        .associate { it.key to it.value }
+                    dailyCharacters = daily,
+                    weeklyPhraseFrequency = weekly
                 )
             }
+            pruneWeeklyDetailsLocked()
             writeLocked()
         }
     }
@@ -132,8 +148,15 @@ object InputStatsManager {
         mutex.withLock {
             ensureLoadedLocked()
             data = when (mode) {
-                ClearMode.Counters -> data.copy(totalCharacters = 0, totalCommits = 0, dailyCharacters = emptyMap())
-                ClearMode.Phrases -> data.copy(phraseFrequency = emptyMap())
+                ClearMode.Counters -> data.copy(
+                    totalCharacters = 0,
+                    totalCommits = 0,
+                    dailyCharacters = emptyMap()
+                )
+                ClearMode.Phrases -> data.copy(
+                    phraseFrequency = emptyMap(),
+                    weeklyPhraseFrequency = emptyMap()
+                )
                 ClearMode.All -> InputStatsData()
             }.copy(updatedAt = System.currentTimeMillis())
             writeLocked()
@@ -148,7 +171,37 @@ object InputStatsManager {
             val file = statsFile()
             if (file.exists()) json.decodeFromString<InputStatsData>(file.readText()) else InputStatsData()
         }.getOrDefault(InputStatsData())
+        pruneWeeklyDetailsLocked()
         loaded = true
+    }
+
+    private fun pruneWeeklyDetailsLocked() {
+        val retainedWeeks = (0 until RETAINED_WEEK_COUNT).map(::weekStartKey).toSet()
+        val oldestDay = retainedWeeks.minOrNull().orEmpty()
+        data = data.copy(
+            formatVersion = 2,
+            dailyCharacters = data.dailyCharacters.filterKeys { it >= oldestDay },
+            weeklyPhraseFrequency = data.weeklyPhraseFrequency
+                .filterKeys { it in retainedWeeks }
+                .mapValues { (_, phrases) ->
+                    phrases.entries.sortedByDescending { it.value }.take(MAX_WEEKLY_PHRASES)
+                        .associate { it.key to it.value }
+                }
+        )
+    }
+
+    fun weekStartKey(weeksAgo: Int = 0): String {
+        val calendar = java.util.Calendar.getInstance().apply {
+            firstDayOfWeek = java.util.Calendar.MONDAY
+            minimalDaysInFirstWeek = 4
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+            val daysSinceMonday = (get(java.util.Calendar.DAY_OF_WEEK) - java.util.Calendar.MONDAY + 7) % 7
+            add(java.util.Calendar.DAY_OF_YEAR, -daysSinceMonday - weeksAgo * 7)
+        }
+        return SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(calendar.time)
     }
 
     private fun scheduleFlushLocked() {
@@ -173,4 +226,6 @@ object InputStatsManager {
     private const val FLUSH_DELAY_MS = 2_000L
     private const val MAX_PHRASES = 3_500
     private const val MAX_PHRASES_TO_KEEP = 3_000
+    private const val MAX_WEEKLY_PHRASES = 300
+    const val RETAINED_WEEK_COUNT = 3
 }

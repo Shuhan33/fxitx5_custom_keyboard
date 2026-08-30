@@ -902,4 +902,14 @@
     <string name="slei_backup_directory_summary">可选：选择 SD 卡或文档目录用于快速导出</string>
     <string name="slei_performance_category">性能</string>
     <string name="slei_performance_diagnostics">输入法弹出诊断</string>
+    <string name="slei_weekly_report">输入周报</string>
+    <string name="slei_weekly_report_summary">查看本周、上周和上上周的每日字数与高频词</string>
+    <string name="slei_weekly_report_title">输入周报</string>
+    <string name="slei_this_week">本周</string>
+    <string name="slei_last_week">上周</string>
+    <string name="slei_two_weeks_ago">上上周</string>
+    <string name="slei_week_range">%1$s — %2$s</string>
+    <string name="slei_week_total">本周共输入 %1$d 个字</string>
+    <string name="slei_weekly_top_words">本周常用词句 Top 10</string>
+    <string name="slei_weekly_no_words">本周还没有可统计的常用词句</string>
 </resources>

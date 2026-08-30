@@ -16,6 +16,7 @@ import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import fcitx5.slei.ui.SleiDataFragment
+import fcitx5.slei.ui.SleiWeeklyReportFragment
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.RawConfig
 import org.fcitx.fcitx5.android.data.quickphrase.QuickPhrase
@@ -97,6 +98,9 @@ sealed class SettingsRoute : Parcelable {
 
     @Serializable
     data object SleiData : SettingsRoute()
+
+    @Serializable
+    data object SleiWeeklyReport : SettingsRoute()
 
     @Serializable
     data object Developer : SettingsRoute()
@@ -257,6 +261,9 @@ sealed class SettingsRoute : Parcelable {
             }
             fragment<SleiDataFragment, SleiData> {
                 label = ctx.getString(R.string.slei_data_and_stats)
+            }
+            fragment<SleiWeeklyReportFragment, SleiWeeklyReport> {
+                label = ctx.getString(R.string.slei_weekly_report)
             }
             fragment<DeveloperFragment, Developer> {
                 label = ctx.getString(R.string.developer)

@@ -11,12 +11,14 @@ object SleiPerformanceMetrics {
     private val serviceCreateMs = AtomicLong(-1)
     private val inputViewCreateMs = AtomicLong(-1)
     private val replaceInputViewMs = AtomicLong(-1)
+    private val viewPrewarmMs = AtomicLong(-1)
     private val inputRequestedAt = AtomicLong(-1)
     private val inputRequestToWindowMs = AtomicLong(-1)
 
     fun recordServiceCreate(durationMs: Long) = serviceCreateMs.set(durationMs)
     fun recordInputViewCreate(durationMs: Long) = inputViewCreateMs.set(durationMs)
     fun recordReplaceInputView(durationMs: Long) = replaceInputViewMs.set(durationMs)
+    fun recordViewPrewarm(durationMs: Long) = viewPrewarmMs.set(durationMs)
     fun markInputRequested() = inputRequestedAt.set(SystemClock.elapsedRealtime())
     fun markWindowShown() {
         val start = inputRequestedAt.getAndSet(-1)
@@ -27,6 +29,7 @@ object SleiPerformanceMetrics {
         append("最近一次弹出：").append(format(inputRequestToWindowMs.get())).append('\n')
         append("输入视图创建：").append(format(inputViewCreateMs.get())).append('\n')
         append("视图替换：").append(format(replaceInputViewMs.get())).append('\n')
+        append("空闲预热：").append(format(viewPrewarmMs.get())).append('\n')
         append("输入法服务启动：").append(format(serviceCreateMs.get()))
     }
 

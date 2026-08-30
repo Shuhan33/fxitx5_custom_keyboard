@@ -77,6 +77,9 @@ class SleiDataFragment : PaddingPreferenceFragment() {
                     title = getString(R.string.slei_stats_top_phrases)
                     isSelectable = false
                 }.also { addPreference(it) }
+                addPreference(R.string.slei_weekly_report, R.string.slei_weekly_report_summary) {
+                    navigateWithAnim(SettingsRoute.SleiWeeklyReport)
+                }
                 addPreference(R.string.slei_stats_export) { exportStats() }
                 addPreference(R.string.slei_stats_import) {
                     importLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
