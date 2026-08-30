@@ -75,15 +75,15 @@ class TextEditingUi(
         contentDescription = ctx.getString(R.string.move_cursor_to_end)
     }
 
-    val selectAllButton = textButton(android.R.string.selectAll, altStyle = true)
+    val selectAllButton = textButton(R.string.slei_edit_select_all, altStyle = true)
 
-    val cutButton = textButton(android.R.string.cut, altStyle = true).apply {
+    val cutButton = textButton(R.string.slei_edit_cut, altStyle = true).apply {
         visibility = View.GONE
     }
 
-    val copyButton = textButton(android.R.string.copy, altStyle = true)
+    val copyButton = textButton(R.string.slei_edit_copy, altStyle = true)
 
-    val pasteButton = textButton(android.R.string.paste, altStyle = true)
+    val pasteButton = textButton(R.string.slei_edit_paste, altStyle = true)
 
     val backspaceButton = themedIconButton("keys.backspace", R.drawable.ic_baseline_backspace_24, altStyle = true).apply {
         soundEffect = InputFeedbacks.SoundEffect.Delete
@@ -92,9 +92,9 @@ class TextEditingUi(
 
     override val root = constraintLayout {
         add(leftButton, lParams {
-            topOfParent()
+            below(upButton)
             leftOfParent()
-            above(homeButton)
+            above(downButton)
             rightToLeftOf(selectButton)
         })
         add(upButton, lParams {
@@ -116,9 +116,9 @@ class TextEditingUi(
             rightToLeftOf(rightButton)
         })
         add(rightButton, lParams {
-            topOfParent()
+            below(upButton)
             leftToRightOf(selectButton)
-            above(endButton)
+            above(downButton)
             rightToLeftOf(copyButton)
         })
 

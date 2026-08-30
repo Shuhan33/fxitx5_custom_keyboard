@@ -147,6 +147,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val clipboardSuggestion = prefs.clipboard.clipboardSuggestion
     private val clipboardItemTimeout = prefs.clipboard.clipboardItemTimeout
     private val clipboardMaskSensitive by prefs.clipboard.clipboardMaskSensitive
+    private var consumedClipboardSuggestion by prefs.internal.consumedClipboardSuggestion
     private val expandedCandidateStyle by prefs.keyboard.expandedCandidateStyle
     private val expandToolbarByDefault by prefs.keyboard.expandToolbarByDefault
     private val toolbarNumRowOnPassword by prefs.keyboard.toolbarNumRowOnPassword
@@ -159,17 +160,29 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private var isInlineSuggestionPresent: Boolean = false
     private var isCapabilityFlagsPassword: Boolean = false
     private var isKeyboardLayoutNumber: Boolean = false
+    private var isPreeditEmpty: Boolean = true
+    private var isCandidateEmpty: Boolean = true
+    private var expandButtonState: ExpandButtonStateMachine.State = Hidden
 
     private enum class NumberRowState { Auto, ForceShow, ForceHide }
 
     private var numberRowState = NumberRowState.Auto
+
+    private fun ClipboardEntry.suggestionSignature(): String =
+        "$source:$id:$timestamp:${text.hashCode()}"
+
+    private fun consumeClipboardSuggestion(entry: ClipboardEntry?) {
+        if (entry != null) consumedClipboardSuggestion = entry.suggestionSignature()
+    }
 
     @Keep
     private val onClipboardUpdateListener =
         ClipboardManager.OnClipboardUpdateListener {
             if (!clipboardSuggestion.getValue()) return@OnClipboardUpdateListener
             service.lifecycleScope.launch {
-                if (it.text.isEmpty()) {
+                if (it.text.isEmpty() || it.suggestionSignature() == consumedClipboardSuggestion) {
+                    clipboardTimeoutJob?.cancel()
+                    clipboardTimeoutJob = null
                     isClipboardFresh = false
                 } else {
                     val isImage = it.type.startsWith("image/")
@@ -537,6 +550,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         ui.clipboardUi.suggestionView.apply {
             setOnClickListener {
                 ClipboardManager.lastEntry?.let {
+                    consumeClipboardSuggestion(it)
                     if (it.isUriEntry()) {
                         windowManager.attachWindow(ClipboardWindow(ClipboardCategory.Media))
                     } else {
@@ -556,6 +570,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
             }
         }
         ui.clipboardUi.close.setOnClickListener {
+            consumeClipboardSuggestion(ClipboardManager.lastEntry)
             dismissClipboardSuggestion()
         }
     }
@@ -665,7 +680,26 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     val expandButtonStateMachine = ExpandButtonStateMachine.new {
-        when (it) {
+        expandButtonState = it
+        refreshExpandButton()
+    }
+
+    private fun refreshExpandButton() {
+        // Post-commit prediction has candidates but no preedit. In this state the trailing
+        // affordance dismisses prediction without deleting editor text. During composition it
+        // remains the always-visible candidate expansion control.
+        if (!isCandidateEmpty && isPreeditEmpty) {
+            candidateUi.expandButton.setOnClickListener {
+                service.restoreVirtualKeyboardForKawaiiBarAction()
+                horizontalCandidate.dismissLocalSuggestions()
+                service.postFcitxJob { reset() }
+            }
+            candidateUi.expandButton.setIcon(R.drawable.ic_baseline_close_24)
+            candidateUi.expandButton.contentDescription = context.getString(R.string.dismiss_prediction)
+            setExpandButtonEnabled(true)
+            return
+        }
+        when (expandButtonState) {
             ClickToAttachWindow -> {
                 setExpandButtonToAttach()
                 setExpandButtonEnabled(true)
@@ -748,7 +782,10 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         ClipboardManager.lastEntry?.let {
             val now = System.currentTimeMillis()
             val clipboardTimeout = clipboardItemTimeout.getValue() * 1000L
-            if (now - it.timestamp < clipboardTimeout) {
+            if (
+                (clipboardTimeout <= 0L || now - it.timestamp < clipboardTimeout) &&
+                it.suggestionSignature() != consumedClipboardSuggestion
+            ) {
                 onClipboardUpdateListener.onUpdate(it)
             }
         }
@@ -826,7 +863,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     override fun onPreeditEmptyStateUpdate(empty: Boolean) {
+        isPreeditEmpty = empty
         barStateMachine.push(PreeditUpdated, PreeditEmpty to empty)
+        refreshExpandButton()
     }
 
     override fun onCandidateUpdate(data: CandidateListEvent.Data) {
@@ -837,10 +876,13 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
         if (useFloatingAlways) {
             // Force stay in Idle state when using floating candidates
+            isCandidateEmpty = true
             barStateMachine.push(CandidatesUpdated, CandidateEmpty to true)
         } else {
-            barStateMachine.push(CandidatesUpdated, CandidateEmpty to data.candidates.isEmpty())
+            isCandidateEmpty = data.candidates.isEmpty()
+            barStateMachine.push(CandidatesUpdated, CandidateEmpty to isCandidateEmpty)
         }
+        refreshExpandButton()
     }
 
     override fun onWindowAttached(window: InputWindow) {

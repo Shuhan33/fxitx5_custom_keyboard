@@ -39,6 +39,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputMethodSubtype
+import android.view.inputmethod.InputConnection
 import android.widget.FrameLayout
 import android.widget.inline.InlinePresentationSpec
 import androidx.annotation.Keep
@@ -55,6 +56,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import fcitx5.slei.stats.InputStatsManager
+import fcitx5.slei.suggestions.EmailSuggestionManager
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -125,6 +127,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private var pendingCandidatePagingMode: Int? = null
     private var appliedCandidatePagingMode: Int? = null
     private var candidatePagingModeJob: Job? = null
+    private var emailSuggestionActive = false
 
     /**
      * Marks if we're in a critical input lifecycle phase to delay theme changes and avoid race conditions.
@@ -803,6 +806,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 }
                 ic.finishComposingText()
             }
+            refreshEmailSuggestions(force = true)
             return
         }
         // committed text should replace composing (if any), replace selected range (if any),
@@ -820,6 +824,25 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 setSelection(target, target)
             }
         }
+        refreshEmailSuggestions(force = true)
+    }
+
+    fun refreshEmailSuggestions(composingSuffix: String = "", force: Boolean = false) {
+        if (!force && !emailSuggestionActive && '@' !in composingSuffix) return
+        val ic: InputConnection = currentInputConnection ?: return
+        if (
+            capabilityFlags.has(CapabilityFlag.Password) ||
+            capabilityFlags.has(CapabilityFlag.Sensitive)
+        ) {
+            inputView?.showEmailSuggestions(emptyList())
+            return
+        }
+        val beforeCursor = runCatching { ic.getTextBeforeCursor(320, 0)?.toString().orEmpty() }
+            .getOrDefault("")
+        val combined = beforeCursor + composingSuffix
+        val suggestions = EmailSuggestionManager.suggestions(this, combined)
+        emailSuggestionActive = EmailSuggestionManager.hasActivePrefix(combined)
+        inputView?.post { inputView?.showEmailSuggestions(suggestions) }
     }
 
     fun setVoiceComposingText(text: String) {
@@ -1522,6 +1545,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             val inputSessionGeneration = ++this.inputSessionGeneration
             selection.resetTo(attribute.initialSelStart, attribute.initialSelEnd)
             resetComposingState()
+            emailSuggestionActive = false
             val flags = CapabilityFlags.fromEditorInfo(attribute)
             capabilityFlags = flags
             inputDeviceManager.notifyOnStartInput(attribute)

@@ -36,6 +36,7 @@ import org.fcitx.fcitx5.android.input.dependency.context
 import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputView
 import org.fcitx.fcitx5.android.input.dependency.theme
+import fcitx5.slei.suggestions.EmailSuggestion
 import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
 import kotlin.math.max
@@ -73,6 +74,7 @@ class HorizontalCandidateComponent :
     private var prefetchInFlight = false
     private var prefetchExhaustedForSnapshot = false
     private var lastExpandedState: Pair<Int, Boolean>? = null
+    private var localSuggestionSuffixes: List<String>? = null
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
         // New input session should not inherit paged-candidate flow state from previous one.
@@ -126,6 +128,7 @@ class HorizontalCandidateComponent :
     }
 
     private fun prefetchMoreCandidates(current: Array<CandidateWord>, total: Int) {
+        if (localSuggestionSuffixes != null) return
         // PagedCandidateEvent indices are relative to the current engine page.
         // Replacing a short later page with global candidates 0..9 makes the
         // displayed word differ from the word selected by the same index.
@@ -159,6 +162,12 @@ class HorizontalCandidateComponent :
                 super.onBindViewHolder(holder, position)
                 holder.itemView.minimumWidth = layoutMinWidth
                 holder.itemView.setOnClickListener {
+                    val currentPosition = holder.bindingAdapterPosition
+                    localSuggestionSuffixes?.getOrNull(currentPosition)?.let { suffix ->
+                        inputView.service.commitText(suffix)
+                        dismissLocalSuggestions()
+                        return@setOnClickListener
+                    }
                     val idx = holder.idx
                     val total = adapter.total
                     if (idx < 0 || (total >= 0 && idx >= total)) {
@@ -167,6 +176,7 @@ class HorizontalCandidateComponent :
                     fcitx.launchOnReady { it.select(idx) }
                 }
                 holder.itemView.setOnLongClickListener {
+                    if (localSuggestionSuffixes != null) return@setOnLongClickListener false
                     inputView.showCandidateActionMenu(holder.idx, holder.candidate.text, holder.ui.root)
                     true
                 }
@@ -234,6 +244,7 @@ class HorizontalCandidateComponent :
     }
 
     override fun onCandidateUpdate(data: FcitxEvent.CandidateListEvent.Data) {
+        localSuggestionSuffixes = null
         if (pagedCandidateFlowActive && data.total == -1) {
             val now = SystemClock.uptimeMillis()
             // Keep preferring paged events only when they are still arriving.
@@ -262,6 +273,7 @@ class HorizontalCandidateComponent :
     }
 
     override fun onPagedCandidateUpdate(data: PagedCandidateEvent.Data) {
+        localSuggestionSuffixes = null
         pagedCandidateFlowActive = true
         lastPagedEventUptimeMs = SystemClock.uptimeMillis()
         pendingLegacyCandidateUpdate?.let(view::removeCallbacks)
@@ -360,10 +372,31 @@ class HorizontalCandidateComponent :
             }
             refreshExpanded()
         }
-        prefetchMoreCandidates(candidates, total)
+        if (localSuggestionSuffixes == null) {
+            prefetchMoreCandidates(candidates, total)
+        }
         // not sure why empty candidates won't trigger layout completion
         if (candidates.isEmpty()) {
             refreshExpanded()
         }
+    }
+
+    fun showEmailSuggestions(suggestions: List<EmailSuggestion>) {
+        if (suggestions.isEmpty()) {
+            dismissLocalSuggestions()
+            return
+        }
+        localSuggestionSuffixes = suggestions.map { it.commitSuffix }
+        val words = suggestions.map { CandidateWord("", it.label, "", false) }.toTypedArray()
+        updateCandidates(words, words.size, -1)
+        bar.onCandidateUpdate(FcitxEvent.CandidateListEvent.Data(words.size, words))
+    }
+
+    fun dismissLocalSuggestions(): Boolean {
+        if (localSuggestionSuffixes == null) return false
+        localSuggestionSuffixes = null
+        updateCandidates(emptyArray(), 0, -1)
+        bar.onCandidateUpdate(FcitxEvent.CandidateListEvent.Data(0, emptyArray()))
+        return true
     }
 }

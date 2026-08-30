@@ -32,21 +32,21 @@ class NumberKeyboard(
                 NumPadKey("1", 0xffb1, 30f, DigitKeyWidth),
                 NumPadKey("2", 0xffb2, 30f, DigitKeyWidth),
                 NumPadKey("3", 0xffb3, 30f, DigitKeyWidth),
-                NumPadKey("/", 0xffaf, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
+                BackspaceKey(SideKeyWidth),
             ),
             listOf(
                 NumPadKey("-", 0xffad, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
                 NumPadKey("4", 0xffb4, 30f, DigitKeyWidth),
                 NumPadKey("5", 0xffb5, 30f, DigitKeyWidth),
                 NumPadKey("6", 0xffb6, 30f, DigitKeyWidth),
-                MiniSpaceKey(SideKeyWidth)
+                NumPadKey("/", 0xffaf, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
             ),
             listOf(
                 NumPadKey("*", 0xffaa, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
                 NumPadKey("7", 0xffb7, 30f, DigitKeyWidth),
                 NumPadKey("8", 0xffb8, 30f, DigitKeyWidth),
                 NumPadKey("9", 0xffb9, 30f, DigitKeyWidth),
-                BackspaceKey(SideKeyWidth)
+                MiniSpaceKey(SideKeyWidth)
             ),
             listOf(
                 LayoutSwitchKey("拼音", TextKeyboard.Name),

@@ -5,6 +5,7 @@
 package fcitx5.slei.stats
 
 import android.content.Context
+import androidx.preference.PreferenceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -47,17 +48,34 @@ object InputStatsManager {
     private val mutex = Mutex()
     private lateinit var applicationContext: Context
     private var loaded = false
+    @Volatile
+    private var collectionEnabled = true
     private var data = InputStatsData()
     private var flushJob: Job? = null
 
     fun init(context: Context) {
         if (::applicationContext.isInitialized) return
         applicationContext = context.applicationContext
+        collectionEnabled = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            .getBoolean(PREF_COLLECTION_ENABLED, true)
         scope.launch { mutex.withLock { ensureLoadedLocked() } }
     }
 
+    fun isCollectionEnabled(): Boolean = collectionEnabled
+
+    fun setCollectionEnabled(enabled: Boolean) {
+        collectionEnabled = enabled
+        if (::applicationContext.isInitialized) {
+            PreferenceManager.getDefaultSharedPreferences(applicationContext)
+                .edit().putBoolean(PREF_COLLECTION_ENABLED, enabled).apply()
+        }
+    }
+
     fun recordCommit(text: String, sensitive: Boolean) {
-        if (sensitive || text.isBlank() || !::applicationContext.isInitialized) return
+        if (
+            !collectionEnabled || sensitive || text.isBlank() ||
+            !::applicationContext.isInitialized
+        ) return
         scope.launch {
             mutex.withLock {
                 ensureLoadedLocked()
@@ -256,5 +274,6 @@ object InputStatsManager {
     private const val MAX_PHRASES = 3_500
     private const val MAX_PHRASES_TO_KEEP = 3_000
     private const val MAX_WEEKLY_PHRASES = 300
+    private const val PREF_COLLECTION_ENABLED = "slei_stats_collection_enabled"
     const val RETAINED_WEEK_COUNT = 3
 }

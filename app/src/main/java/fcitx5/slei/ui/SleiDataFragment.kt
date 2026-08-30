@@ -17,8 +17,11 @@ import androidx.appcompat.app.AlertDialog
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
+import androidx.preference.EditTextPreference
+import androidx.preference.SwitchPreferenceCompat
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import fcitx5.slei.stats.InputStatsManager
+import fcitx5.slei.suggestions.EmailSuggestionManager
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
@@ -73,6 +76,15 @@ class SleiDataFragment : PaddingPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
             addCategory(R.string.slei_stats_category) {
+                addPreference(SwitchPreferenceCompat(context).apply {
+                    title = getString(R.string.slei_stats_collection)
+                    summary = getString(R.string.slei_stats_collection_summary)
+                    isChecked = InputStatsManager.isCollectionEnabled()
+                    setOnPreferenceChangeListener { _, newValue ->
+                        InputStatsManager.setCollectionEnabled(newValue as Boolean)
+                        true
+                    }
+                })
                 overviewPreference = Preference(context).apply {
                     title = getString(R.string.slei_stats_overview)
                     isSelectable = false
@@ -95,6 +107,17 @@ class SleiDataFragment : PaddingPreferenceFragment() {
                 addPreference(R.string.slei_stats_clear) { showClearDialog() }
             }
             addCategory(R.string.slei_personalization_category) {
+                addPreference(EditTextPreference(context).apply {
+                    key = EmailSuggestionManager.PREF_DOMAINS
+                    title = getString(R.string.slei_email_domains)
+                    dialogTitle = title
+                    text = prefs.getString(key, EmailSuggestionManager.DEFAULT_DOMAINS)
+                    summaryProvider = EditTextPreference.SimpleSummaryProvider.getInstance()
+                    setOnBindEditTextListener { editText ->
+                        editText.isSingleLine = false
+                        editText.minLines = 2
+                    }
+                })
                 addPreference(R.string.slei_personal_phrases, R.string.slei_personal_phrases_summary) {
                     navigateWithAnim(SettingsRoute.PinyinCustomPhrase)
                 }

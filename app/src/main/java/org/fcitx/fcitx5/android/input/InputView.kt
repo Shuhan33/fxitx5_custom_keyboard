@@ -129,6 +129,10 @@ class InputView(
     theme: Theme
 ) : BaseInputView(service, fcitx, theme) {
 
+    fun showEmailSuggestions(suggestions: List<fcitx5.slei.suggestions.EmailSuggestion>) {
+        horizontalCandidate.showEmailSuggestions(suggestions)
+    }
+
     private val keyBorder by ThemeManager.prefs.keyBorder
 
     private val customBackground = imageView {
@@ -3327,6 +3331,7 @@ class InputView(
             is FcitxEvent.ClientPreeditEvent -> {
                 preeditEmptyState.updatePreeditEmptyState(clientPreedit = it.data)
                 broadcaster.onClientPreeditUpdate(it.data)
+                service.refreshEmailSuggestions(it.data.toString())
             }
             is FcitxEvent.InputPanelEvent -> {
                 preeditEmptyState.updatePreeditEmptyState(preedit = it.data.preedit)
