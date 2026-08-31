@@ -11,6 +11,7 @@ import android.graphics.drawable.shapes.RectShape
 import android.text.Spanned
 import android.text.SpannedString
 import android.text.style.DynamicDrawableSpan
+import android.view.MotionEvent
 import android.view.View
 import android.widget.TextView
 import androidx.annotation.ColorInt
@@ -28,7 +29,8 @@ import splitties.views.dsl.core.verticalLayout
 open class PreeditUi(
     override val ctx: Context,
     private val theme: Theme,
-    private val setupTextView: (TextView.() -> Unit)? = null
+    private val setupTextView: (TextView.() -> Unit)? = null,
+    private val onPreeditClick: ((Int) -> Unit)? = null
 ) : Ui {
 
     class CursorSpan(ctx: Context, @ColorInt color: Int, metrics: Paint.FontMetricsInt) :
@@ -60,6 +62,45 @@ open class PreeditUi(
     private val upView = createTextView()
 
     private val downView = createTextView()
+
+    private var upAuxLength = 0
+    private var upPreeditLength = 0
+    private var insertedCursorPosition = -1
+
+    init {
+        if (onPreeditClick != null) {
+            upView.setOnTouchListener { view, event ->
+                if (upPreeditLength <= 0) return@setOnTouchListener false
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    // Consume DOWN so Android keeps this TextView as the touch target and
+                    // delivers the matching UP from which we calculate the character.
+                    return@setOnTouchListener true
+                }
+                if (event.actionMasked != MotionEvent.ACTION_UP) {
+                    return@setOnTouchListener event.actionMasked != MotionEvent.ACTION_CANCEL
+                }
+                val textView = view as TextView
+                val layout = textView.layout ?: return@setOnTouchListener false
+                val x = event.x - textView.totalPaddingLeft + textView.scrollX
+                val y = event.y - textView.totalPaddingTop + textView.scrollY
+                val line = layout.getLineForVertical(y.toInt().coerceAtLeast(0))
+                var renderedOffset = layout.getOffsetForHorizontal(line, x)
+                // update() inserts a one-character drawable cursor into the rendered text.
+                // Remove that synthetic character before converting the click to a preedit
+                // code-point position understood by Fcitx.
+                if (insertedCursorPosition >= 0 && renderedOffset > insertedCursorPosition) {
+                    renderedOffset--
+                }
+                val preeditOffset = (renderedOffset - upAuxLength).coerceIn(0, upPreeditLength)
+                val source = inputPanelPreedit
+                val codePointOffset = source.codePointCount(0, preeditOffset.coerceAtMost(source.length))
+                onPreeditClick.invoke(codePointOffset)
+                true
+            }
+        }
+    }
+
+    private var inputPanelPreedit: String = ""
 
     var visible = false
         private set
@@ -97,6 +138,9 @@ open class PreeditUi(
     }
 
     fun update(inputPanel: FcitxEvent.InputPanelEvent.Data) {
+        inputPanelPreedit = inputPanel.preedit.toString()
+        upAuxLength = inputPanel.auxUp.length
+        upPreeditLength = inputPanelPreedit.length
         val activeBkg = theme.genericActiveBackgroundColor
         val upString: SpannedString
         val upCursor: Int
@@ -123,8 +167,10 @@ open class PreeditUi(
             return
         }
         val upStringWithCursor = if (upCursor < 0 || upCursor == upString.length) {
+            insertedCursorPosition = -1
             upString
         } else buildSpannedString {
+            insertedCursorPosition = upCursor
             if (upCursor > 0) append(upString, 0, upCursor)
             append('|')
             setSpan(cursorSpan, upCursor, upCursor + 1, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)

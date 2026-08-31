@@ -136,7 +136,12 @@ class CandidatesView(
         setPadding(h, v, h, v)
     }
 
-    private val preeditUi = PreeditUi(ctx, theme, setupTextView)
+    private val preeditUi = PreeditUi(
+        ctx,
+        theme,
+        setupTextView,
+        onPreeditClick = { position -> fcitx.launchOnReady { it.moveCursor(position) } }
+    )
 
     private val candidatesUi = PagedCandidatesUi(
         ctx, theme, setupTextView,

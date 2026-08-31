@@ -73,7 +73,6 @@ class HorizontalCandidateComponent :
     private var pendingLegacyCandidateUpdate: Runnable? = null
     private var prefetchInFlight = false
     private var prefetchExhaustedForSnapshot = false
-    private var lastExpandedState: Pair<Int, Boolean>? = null
     private var localSuggestionSuffixes: List<String>? = null
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
@@ -103,9 +102,9 @@ class HorizontalCandidateComponent :
         // Expanded candidates are a complete view, not a continuation after the
         // horizontal strip. Offset 0 includes the first ten candidates there.
         val expandedOffset = if (empty) EmptyExpandedOffset else 0
-        val state = expandedOffset to empty
-        if (state == lastExpandedState) return
-        lastExpandedState = state
+        // Candidate contents can change while offset and emptiness stay unchanged (for
+        // example wo'ai'ni -> select 我 -> candidates for ai). Emit every new snapshot so
+        // an already-open expanded window cannot retain the previous syllable's list.
         _expandedCandidateOffset.tryEmit(expandedOffset)
         bar.expandButtonStateMachine.push(
             ExpandedCandidatesUpdated,

@@ -969,8 +969,14 @@ class TextKeyboard(
     private fun forceUppercaseLetters(): Boolean {
         if (!keepLettersUppercase.getValue()) return false
         val lang = ime?.languageCode.orEmpty().lowercase()
-        return !lang.startsWith("en")
+        // The all-uppercase presentation is a Chinese-layout preference. Applying it to
+        // every non-English/unknown input method leaves the key labels stuck in uppercase
+        // while a Latin keyboard is actually producing lowercase characters.
+        return lang.startsWith("zh")
     }
+
+    private fun isChineseInputMethod(): Boolean =
+        ime?.languageCode.orEmpty().lowercase().startsWith("zh")
 
     init {
         // BaseKeyboard has already built the initial layout. If the current IME was supplied
@@ -1509,6 +1515,14 @@ class TextKeyboard(
         val oldCapsState = capsState
         capsState =
             if (lock) {
+                when (capsState) {
+                    CapsState.Lock -> CapsState.None
+                    else -> CapsState.Lock
+                }
+            } else if (isChineseInputMethod()) {
+                // In Chinese mode Shift is an explicit ASCII-uppercase mode, not a
+                // one-character sentence-capitalization hint. Keep it latched until the
+                // user taps Shift again so uppercase letters bypass Pinyin consistently.
                 when (capsState) {
                     CapsState.Lock -> CapsState.None
                     else -> CapsState.Lock

@@ -6,10 +6,12 @@ package org.fcitx.fcitx5.android.input.preedit
 
 import android.view.View
 import org.fcitx.fcitx5.android.core.FcitxEvent
+import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.dependency.context
+import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.theme
 import org.mechdancer.dependency.Dependent
 import org.mechdancer.dependency.UniqueComponent
@@ -23,6 +25,7 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
     ManagedHandler by managedHandler() {
 
     private val context by manager.context()
+    private val fcitx by manager.fcitx()
     private val theme by manager.theme()
 
     /**
@@ -35,10 +38,19 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
         val keyBorder = ThemeManager.prefs.keyBorder.getValue()
         val bkgColor =
             if (!keyBorder && theme is Theme.Builtin) theme.barColor else theme.backgroundColor
-        PreeditUi(context, theme, setupTextView = {
-            backgroundColor = bkgColor
-            horizontalPadding = dp(8)
-        }).apply {
+        PreeditUi(
+            context,
+            theme,
+            setupTextView = {
+                backgroundColor = bkgColor
+                horizontalPadding = dp(8)
+            },
+            onPreeditClick = { position ->
+                // Pinyin's native InvokeAction implementation cancels selected segments
+                // when the click lands inside them, and otherwise repositions the cursor.
+                fcitx.launchOnReady { it.moveCursor(position) }
+            }
+        ).apply {
             // TODO make it customizable
             root.alpha = 0.8f
             root.visibility = View.INVISIBLE

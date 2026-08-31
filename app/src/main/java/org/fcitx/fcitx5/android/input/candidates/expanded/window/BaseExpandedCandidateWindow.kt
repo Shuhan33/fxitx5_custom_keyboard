@@ -174,7 +174,9 @@ abstract class BaseExpandedCandidateWindow<T : BaseExpandedCandidateWindow<T>> :
                     windowManager.attachWindow(KeyboardWindow)
                 } else {
                     candidateLayout.resetPosition()
-                    adapter.refreshWithOffset(it)
+                    // The current composing segment may change without changing offset or
+                    // candidate count. Force Paging 3 to discard the old syllable snapshot.
+                    adapter.refreshWithOffset(it, force = true)
                 }
             }
         }
