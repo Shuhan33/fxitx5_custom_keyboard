@@ -11,8 +11,9 @@ import android.graphics.drawable.shapes.RectShape
 import android.text.Spanned
 import android.text.SpannedString
 import android.text.style.DynamicDrawableSpan
-import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.core.text.buildSpannedString
@@ -30,7 +31,7 @@ open class PreeditUi(
     override val ctx: Context,
     private val theme: Theme,
     private val setupTextView: (TextView.() -> Unit)? = null,
-    private val onPreeditClick: ((Int) -> Unit)? = null
+    private val onUndoSelection: ((Int) -> Unit)? = null
 ) : Ui {
 
     class CursorSpan(ctx: Context, @ColorInt color: Int, metrics: Paint.FontMetricsInt) :
@@ -63,53 +64,50 @@ open class PreeditUi(
 
     private val downView = createTextView()
 
-    private var upAuxLength = 0
-    private var upPreeditLength = 0
     private var insertedCursorPosition = -1
+    private var undoSelectionPosition = -1
 
-    init {
-        if (onPreeditClick != null) {
-            upView.setOnTouchListener { view, event ->
-                if (upPreeditLength <= 0) return@setOnTouchListener false
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    // Consume DOWN so Android keeps this TextView as the touch target and
-                    // delivers the matching UP from which we calculate the character.
-                    return@setOnTouchListener true
-                }
-                if (event.actionMasked != MotionEvent.ACTION_UP) {
-                    return@setOnTouchListener event.actionMasked != MotionEvent.ACTION_CANCEL
-                }
-                val textView = view as TextView
-                val layout = textView.layout ?: return@setOnTouchListener false
-                val x = event.x - textView.totalPaddingLeft + textView.scrollX
-                val y = event.y - textView.totalPaddingTop + textView.scrollY
-                val line = layout.getLineForVertical(y.toInt().coerceAtLeast(0))
-                var renderedOffset = layout.getOffsetForHorizontal(line, x)
-                // update() inserts a one-character drawable cursor into the rendered text.
-                // Remove that synthetic character before converting the click to a preedit
-                // code-point position understood by Fcitx.
-                if (insertedCursorPosition >= 0 && renderedOffset > insertedCursorPosition) {
-                    renderedOffset--
-                }
-                val preeditOffset = (renderedOffset - upAuxLength).coerceIn(0, upPreeditLength)
-                val source = inputPanelPreedit
-                var codePointOffset = source.codePointCount(0, preeditOffset.coerceAtMost(source.length))
-                // Converted Pinyin segments form the leading non-ASCII part of preedit
-                // (for example 例'zi). A tap on that glyph should target the character's
-                // leading boundary; Fcitx then cancels that selection and restores li'zi.
-                val selectedPrefixLength = source.indexOfFirst {
-                    it in 'a'..'z' || it in 'A'..'Z' || it == '\''
-                }.let { if (it < 0) source.length else it }
-                if (preeditOffset <= selectedPrefixLength && selectedPrefixLength > 0) {
-                    codePointOffset = (codePointOffset - 1).coerceAtLeast(0)
-                }
-                onPreeditClick.invoke(codePointOffset)
-                true
-            }
+    /**
+     * A dedicated target is intentionally used instead of making the preedit text clickable.
+     * Moving the Fcitx cursor from an arbitrary glyph can reset the whole composition for some
+     * Pinyin states. This button always targets the last selected code point, which asks Pinyin
+     * to undo exactly one selected segment.
+     */
+    private val undoSelectionView = createTextView().apply {
+        text = "↶"
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10f)
+        includeFontPadding = false
+        setPadding(dp(3), 0, dp(3), 0)
+        contentDescription = "撤销上一次选词"
+        visibility = View.GONE
+        isClickable = true
+        isFocusable = true
+        setOnClickListener {
+            undoSelectionPosition.takeIf { position -> position >= 0 }
+                ?.let { position -> onUndoSelection?.invoke(position) }
         }
     }
 
-    private var inputPanelPreedit: String = ""
+    private val upContainer = FrameLayout(ctx).apply {
+        clipChildren = false
+        clipToPadding = false
+        addView(
+            upView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        addView(
+            undoSelectionView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+    }
+
+    private var selectedPrefixLength = 0
 
     var visible = false
         private set
@@ -137,7 +135,8 @@ open class PreeditUi(
         }
 
     override val root: View = verticalLayout {
-        add(upView, lParams())
+        clipChildren = false
+        add(upContainer, lParams())
         add(downView, lParams())
     }
 
@@ -147,9 +146,12 @@ open class PreeditUi(
     }
 
     fun update(inputPanel: FcitxEvent.InputPanelEvent.Data) {
-        inputPanelPreedit = inputPanel.preedit.toString()
-        upAuxLength = inputPanel.auxUp.length
-        upPreeditLength = inputPanelPreedit.length
+        val preedit = inputPanel.preedit.toString()
+        selectedPrefixLength = preedit.indexOfFirst {
+            it in 'a'..'z' || it in 'A'..'Z' || it == '\''
+        }.let { if (it < 0) preedit.length else it }
+        val selectedCodePoints = preedit.codePointCount(0, selectedPrefixLength)
+        undoSelectionPosition = if (selectedCodePoints > 0) selectedCodePoints - 1 else -1
         val activeBkg = theme.genericActiveBackgroundColor
         val upString: SpannedString
         val upCursor: Int
@@ -173,6 +175,7 @@ open class PreeditUi(
         if (!visible) {
             updateTextView(upView, "", false)
             updateTextView(downView, "", false)
+            undoSelectionView.visibility = View.GONE
             return
         }
         val upStringWithCursor = if (upCursor < 0 || upCursor == upString.length) {
@@ -187,5 +190,29 @@ open class PreeditUi(
         }
         updateTextView(upView, upStringWithCursor, hasUp)
         updateTextView(downView, downString, hasDown)
+        updateUndoSelectionIndicator(inputPanel.auxUp.length)
+    }
+
+    private fun updateUndoSelectionIndicator(auxUpLength: Int) {
+        if (undoSelectionPosition < 0 || upView.visibility != View.VISIBLE) {
+            undoSelectionView.visibility = View.GONE
+            return
+        }
+        undoSelectionView.visibility = View.VISIBLE
+        upContainer.post {
+            if (undoSelectionPosition < 0 || upView.visibility != View.VISIBLE) return@post
+            val layout = upView.layout ?: return@post
+            var selectedEnd = (auxUpLength + selectedPrefixLength).coerceAtMost(upView.text.length)
+            if (insertedCursorPosition in 0 until selectedEnd) selectedEnd++
+            val line = layout.getLineForOffset(selectedEnd.coerceAtMost(upView.text.length))
+            val x = layout.getPrimaryHorizontal(selectedEnd.coerceAtMost(upView.text.length))
+            undoSelectionView.translationX =
+                (upView.totalPaddingLeft + x - undoSelectionView.measuredWidth * 0.45f)
+                    .coerceAtLeast(0f)
+            undoSelectionView.translationY =
+                (layout.getLineTop(line) - ctx.dp(2)).toFloat()
+                    .coerceAtLeast(-ctx.dp(2).toFloat())
+            undoSelectionView.bringToFront()
+        }
     }
 }

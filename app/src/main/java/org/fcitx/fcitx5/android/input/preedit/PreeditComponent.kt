@@ -45,9 +45,8 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
                 backgroundColor = bkgColor
                 horizontalPadding = dp(8)
             },
-            onPreeditClick = { position ->
-                // Pinyin's native InvokeAction implementation cancels selected segments
-                // when the click lands inside them, and otherwise repositions the cursor.
+            onUndoSelection = { position ->
+                // Targeting the last selected code point makes Pinyin undo one segment only.
                 fcitx.launchOnReady { it.moveCursor(position) }
             }
         ).apply {

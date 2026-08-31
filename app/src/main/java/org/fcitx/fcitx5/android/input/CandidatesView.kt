@@ -140,7 +140,7 @@ class CandidatesView(
         ctx,
         theme,
         setupTextView,
-        onPreeditClick = { position -> fcitx.launchOnReady { it.moveCursor(position) } }
+        onUndoSelection = { position -> fcitx.launchOnReady { it.moveCursor(position) } }
     )
 
     private val candidatesUi = PagedCandidatesUi(
