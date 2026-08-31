@@ -24,6 +24,7 @@ import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener.Backspace
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener.BackspaceSwipeState.Stopped
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.CommitAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.DeleteSelectionAction
+import org.fcitx.fcitx5.android.input.keyboard.KeyAction.DirectCommitAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.FcitxKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.LangSwitchAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.MoveSelectionAction
@@ -72,11 +73,12 @@ class CommonKeyActionListener :
     private var voiceHoldActive = false
 
     // there should be a new fcitx API for this
-    private suspend fun FcitxAPI.commitAndReset() {
+    private suspend fun FcitxAPI.commitAndReset(includePredictionCandidates: Boolean = true) {
         if (inputMethodEntryCached.languageCode.startsWith("zh")) {
             // Chinese: select 1st candidate if available
             // Check for candidates in prediction mode (preedit empty but candidates available)
-            val hasCandidates = horizontalCandidate.adapter.itemCount > 0
+            val hasCandidates = includePredictionCandidates &&
+                horizontalCandidate.adapter.itemCount > 0
             if (clientPreeditCached.isNotEmpty() || inputPanelCached.preedit.isNotEmpty() || hasCandidates) {
                 // preedit not empty or prediction candidates available, select the first candidate
                 select(0)
@@ -162,6 +164,13 @@ class CommonKeyActionListener :
                             service.lifecycleScope.launch { service.commitText(action.text) }
                         }
                     }
+                }
+                is DirectCommitAction -> service.postFcitxJob {
+                    // Literal uppercase input in Chinese may follow either an active
+                    // composition or a post-commit prediction list. Commit real preedit,
+                    // but never accept a prediction merely because a letter was pressed.
+                    commitAndReset(includePredictionCandidates = false)
+                    service.lifecycleScope.launch { service.commitText(action.text) }
                 }
                 is QuickPhraseAction -> service.postFcitxJob {
                     commitAndReset()

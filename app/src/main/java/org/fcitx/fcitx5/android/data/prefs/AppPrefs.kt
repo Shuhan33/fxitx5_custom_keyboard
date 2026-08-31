@@ -74,6 +74,10 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
         val lastShareReceiveDirectory = string("last_share_receive_directory", "")
         val lastShareReceiveDirectoryRemembered = bool("last_share_receive_directory_remembered", false)
         val consumedClipboardSuggestion = string("consumed_clipboard_suggestion", "")
+        val clipboardSuggestionImpressionSignature =
+            string("clipboard_suggestion_impression_signature", "")
+        val clipboardSuggestionImpressionCount =
+            int("clipboard_suggestion_impression_count", 0)
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {

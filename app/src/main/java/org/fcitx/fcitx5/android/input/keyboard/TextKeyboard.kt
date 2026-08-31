@@ -989,6 +989,7 @@ class TextKeyboard(
         get() = allViews.filterIsInstance(TextKeyView::class.java).toList()
 
     private var capsState: CapsState = CapsState.None
+    private var lastInputMethodLanguage = ime?.languageCode.orEmpty().lowercase()
 
     private fun isDisplayCapsOn(): Boolean {
         return capsState != CapsState.None || isSimulatedCapsLockOn()
@@ -1198,6 +1199,20 @@ class TextKeyboard(
         when (action) {
             is KeyAction.FcitxKeyAction -> when (source) {
                 KeyActionListener.Source.Keyboard -> {
+                    val isDirectChineseUppercase =
+                        isChineseInputMethod() &&
+                            capsState == CapsState.Lock &&
+                            !action.up &&
+                            action.act.length == 1 &&
+                            action.act[0].isLetter()
+                    if (isDirectChineseUppercase) {
+                        // Chinese Shift is a persistent direct-ASCII mode. Do not send the
+                        // letter through Pinyin: commit it to the editor immediately and keep
+                        // Shift locked until the user taps Shift again.
+                        transformed = KeyAction.DirectCommitAction(action.act.uppercase())
+                        super.onAction(transformed, source)
+                        return
+                    }
                     when (capsState) {
                         CapsState.None -> {
                             transformed = if (isSimulatedCapsLockOn()) {
@@ -1447,6 +1462,14 @@ class TextKeyboard(
     }
 
     override fun onInputMethodUpdate(ime: InputMethodEntry) {
+        val newLanguage = ime.languageCode.lowercase()
+        if (lastInputMethodLanguage.startsWith("zh") && !newLanguage.startsWith("zh")) {
+            // Switching away from Chinese starts the Latin keyboard in its normal lowercase
+            // state, independent from the persistent Chinese direct-uppercase latch.
+            capsState = CapsState.None
+            getService()?.setVirtualShiftLockState(false)
+        }
+        lastInputMethodLanguage = newLanguage
         // update ime of companion object ime
         TextKeyboard.ime = ime
         val signature = layoutSignature(ime)
@@ -1463,8 +1486,10 @@ class TextKeyboard(
     override fun onStyleRefreshFinished() {
         ensureSpecialKeyViewsInitialized()
         updateCapsButtonIcon()
-        updateAlphabetKeys()
         updatePunctuationKeys()
+        // Punctuation rendering may touch AltText keys, so alphabet casing must be the final
+        // presentation pass. This keeps English labels synchronized with actual Shift state.
+        updateAlphabetKeys()
         updateSpaceLabel(TextKeyboard.ime)
     }
 
@@ -1633,10 +1658,14 @@ class TextKeyboard(
         textKeys.forEach {
             if (it is AltTextKeyView) {
                 it.def as KeyDef.Appearance.AltText
-                it.mainText.text = if (chinese && it.def.character == ".") {
-                    "。"
-                } else {
-                    it.def.displayText
+                val character = it.def.character
+                val isLetter = character.length == 1 && character[0].isLetter()
+                if (!isLetter) {
+                    it.mainText.text = if (chinese && character == ".") {
+                        "。"
+                    } else {
+                        it.def.displayText
+                    }
                 }
                 it.altText.text = transformPunctuation(it.def.altText)
             } else {

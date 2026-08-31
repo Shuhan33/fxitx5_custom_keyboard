@@ -93,7 +93,16 @@ open class PreeditUi(
                 }
                 val preeditOffset = (renderedOffset - upAuxLength).coerceIn(0, upPreeditLength)
                 val source = inputPanelPreedit
-                val codePointOffset = source.codePointCount(0, preeditOffset.coerceAtMost(source.length))
+                var codePointOffset = source.codePointCount(0, preeditOffset.coerceAtMost(source.length))
+                // Converted Pinyin segments form the leading non-ASCII part of preedit
+                // (for example 例'zi). A tap on that glyph should target the character's
+                // leading boundary; Fcitx then cancels that selection and restores li'zi.
+                val selectedPrefixLength = source.indexOfFirst {
+                    it in 'a'..'z' || it in 'A'..'Z' || it == '\''
+                }.let { if (it < 0) source.length else it }
+                if (preeditOffset <= selectedPrefixLength && selectedPrefixLength > 0) {
+                    codePointOffset = (codePointOffset - 1).coerceAtLeast(0)
+                }
                 onPreeditClick.invoke(codePointOffset)
                 true
             }

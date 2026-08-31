@@ -75,6 +75,9 @@ sealed class KeyAction {
 
     data class CommitAction(val text: String) : KeyAction()
 
+    /** Commit literal text while dismissing prediction candidates without selecting them. */
+    data class DirectCommitAction(val text: String) : KeyAction()
+
     data class CapsAction(val lock: Boolean) : KeyAction()
 
     data object QuickPhraseAction : KeyAction()

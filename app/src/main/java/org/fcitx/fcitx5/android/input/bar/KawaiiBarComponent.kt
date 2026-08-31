@@ -148,6 +148,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val clipboardItemTimeout = prefs.clipboard.clipboardItemTimeout
     private val clipboardMaskSensitive by prefs.clipboard.clipboardMaskSensitive
     private var consumedClipboardSuggestion by prefs.internal.consumedClipboardSuggestion
+    private var clipboardImpressionSignature by
+        prefs.internal.clipboardSuggestionImpressionSignature
+    private var clipboardImpressionCount by prefs.internal.clipboardSuggestionImpressionCount
     private val expandedCandidateStyle by prefs.keyboard.expandedCandidateStyle
     private val expandToolbarByDefault by prefs.keyboard.expandToolbarByDefault
     private val toolbarNumRowOnPassword by prefs.keyboard.toolbarNumRowOnPassword
@@ -155,6 +158,9 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val preferredVoiceInput by prefs.keyboard.preferredVoiceInput
 
     private var clipboardTimeoutJob: Job? = null
+    private var inputSessionId = 0L
+    private var clipboardImpressionSessionId = -1L
+    private var clipboardImpressionSessionSignature = ""
 
     private var isClipboardFresh: Boolean = false
     private var isInlineSuggestionPresent: Boolean = false
@@ -171,8 +177,44 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private fun ClipboardEntry.suggestionSignature(): String =
         "$source:$id:$timestamp:${text.hashCode()}"
 
+    private fun ClipboardEntry.isSuggestionExpired(now: Long = System.currentTimeMillis()): Boolean =
+        now - timestamp >= MAX_CLIPBOARD_SUGGESTION_AGE_MS
+
+    private fun ClipboardEntry.isSuggestionSuppressed(): Boolean {
+        val signature = suggestionSignature()
+        if (signature == consumedClipboardSuggestion) return true
+        if (signature == clipboardImpressionSignature && clipboardImpressionCount >= 2) {
+            // Two separate input sessions displayed this item without paste/close. Treat a
+            // third attempt exactly like an explicit close, while retaining the item in the
+            // full clipboard panel.
+            consumedClipboardSuggestion = signature
+            return true
+        }
+        return false
+    }
+
+    private fun recordClipboardSuggestionImpression(entry: ClipboardEntry) {
+        if (inputSessionId <= 0L) return
+        val signature = entry.suggestionSignature()
+        if (
+            clipboardImpressionSessionId == inputSessionId &&
+            clipboardImpressionSessionSignature == signature
+        ) return
+        if (clipboardImpressionSignature != signature) {
+            clipboardImpressionSignature = signature
+            clipboardImpressionCount = 0
+        }
+        clipboardImpressionCount = (clipboardImpressionCount + 1).coerceAtMost(2)
+        clipboardImpressionSessionId = inputSessionId
+        clipboardImpressionSessionSignature = signature
+    }
+
     private fun consumeClipboardSuggestion(entry: ClipboardEntry?) {
-        if (entry != null) consumedClipboardSuggestion = entry.suggestionSignature()
+        if (entry != null) {
+            consumedClipboardSuggestion = entry.suggestionSignature()
+            clipboardImpressionSignature = entry.suggestionSignature()
+            clipboardImpressionCount = 2
+        }
     }
 
     @Keep
@@ -180,11 +222,12 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         ClipboardManager.OnClipboardUpdateListener {
             if (!clipboardSuggestion.getValue()) return@OnClipboardUpdateListener
             service.lifecycleScope.launch {
-                if (it.text.isEmpty() || it.suggestionSignature() == consumedClipboardSuggestion) {
+                if (it.text.isEmpty() || it.isSuggestionExpired() || it.isSuggestionSuppressed()) {
                     clipboardTimeoutJob?.cancel()
                     clipboardTimeoutJob = null
                     isClipboardFresh = false
                 } else {
+                    recordClipboardSuggestionImpression(it)
                     val isImage = it.type.startsWith("image/")
                     if (isImage) {
                         idleUi.clipboardUi.text.visibility = View.GONE
@@ -810,6 +853,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     }
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
+        inputSessionId++
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             idleUi.privateMode(info.imeOptions.hasFlag(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING))
         }
@@ -966,6 +1010,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
 
     companion object {
         const val HEIGHT = 40
+        private const val MAX_CLIPBOARD_SUGGESTION_AGE_MS = 10L * 60L * 1000L
     }
 
     private fun updateButtonsState() {
