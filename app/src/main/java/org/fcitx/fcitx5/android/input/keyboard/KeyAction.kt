@@ -88,6 +88,9 @@ sealed class KeyAction {
 
     data object ToggleEnglishSpellAction : KeyAction()
 
+    /** Clear the current preedit/candidate composition without committing it. */
+    data object ClearPreeditAction : KeyAction()
+
     data object ShowInputMethodPickerAction : KeyAction()
 
     data class LayoutSwitchAction(val act: String = "") : KeyAction()

@@ -183,6 +183,11 @@ class CommonKeyActionListener :
                 is KeyAction.ToggleEnglishSpellAction -> {
                     org.fcitx.fcitx5.android.data.pinyin.EnglishSpellSettings.toggle()
                 }
+                is KeyAction.ClearPreeditAction -> {
+                    if (!preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0) {
+                        service.postFcitxJob { reset() }
+                    }
+                }
                 is LangSwitchAction -> {
                     when (langSwitchKeyBehavior) {
                         LangSwitchBehavior.Enumerate -> {

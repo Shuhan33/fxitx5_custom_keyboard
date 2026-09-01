@@ -20,6 +20,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.updateLayoutParams
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.FcitxEvent
+import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.daemon.FcitxConnection
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
@@ -140,7 +141,9 @@ class CandidatesView(
         ctx,
         theme,
         setupTextView,
-        onUndoSelection = { position -> fcitx.launchOnReady { it.moveCursor(position) } }
+        onUndoSelection = {
+            fcitx.launchOnReady { it.sendKey(FcitxKeyMapping.FcitxKey_BackSpace) }
+        }
     )
 
     private val candidatesUi = PagedCandidatesUi(

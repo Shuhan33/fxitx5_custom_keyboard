@@ -188,10 +188,15 @@ androidComponents {
             flavorFx -> {
                 variant.outputs.forEach { output ->
                     if (output is com.android.build.api.variant.impl.VariantOutputImpl) {
+                        val abi = output.filters
+                            .find {
+                                it.filterType ==
+                                    com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+                            }
+                            ?.identifier
+                            ?: "universal"
                         output.outputFileName.set(
-                            output.outputFileName.get()
-                                .replace("org.fcitx.fcitx5.android-", "org.fcitx.fcitx5.android.fx-")
-                                .replace("-fx-", "-")
+                            "slei-keyboard-${output.versionName.get()}-$abi-${variant.buildType}.apk"
                         )
                     }
                 }

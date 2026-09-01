@@ -6,6 +6,7 @@ package org.fcitx.fcitx5.android.input.preedit
 
 import android.view.View
 import org.fcitx.fcitx5.android.core.FcitxEvent
+import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
@@ -45,9 +46,8 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
                 backgroundColor = bkgColor
                 horizontalPadding = dp(8)
             },
-            onUndoSelection = { position ->
-                // Targeting the last selected code point makes Pinyin undo one segment only.
-                fcitx.launchOnReady { it.moveCursor(position) }
+            onUndoSelection = {
+                fcitx.launchOnReady { it.sendKey(FcitxKeyMapping.FcitxKey_BackSpace) }
             }
         ).apply {
             // TODO make it customizable
