@@ -110,7 +110,7 @@ class AlphabetKey(
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(character)),
-        Behavior.Swipe(KeyAction.CommitAction(punctuation))
+        Behavior.Swipe(KeyAction.ComposeLiteralAction(punctuation))
     ),
     popup ?: arrayOf(
         Popup.AltPreview(character, punctuation),
@@ -132,7 +132,7 @@ class AlphabetDigitKey(
     ),
     setOf(
         Behavior.Press(KeyAction.FcitxKeyAction(character)),
-        Behavior.Swipe(KeyAction.SymAction(KeySym(sym), NumLockState))
+        Behavior.Swipe(KeyAction.ComposeLiteralAction(altText))
     ),
     popup ?: arrayOf(
         Popup.AltPreview(character, altText),

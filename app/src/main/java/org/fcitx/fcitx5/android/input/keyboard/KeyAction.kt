@@ -78,6 +78,9 @@ sealed class KeyAction {
     /** Commit literal text while dismissing prediction candidates without selecting them. */
     data class DirectCommitAction(val text: String) : KeyAction()
 
+    /** Append a swipe-up digit/symbol to an active Chinese composition. */
+    data class ComposeLiteralAction(val text: String) : KeyAction()
+
     data class CapsAction(val lock: Boolean) : KeyAction()
 
     data object QuickPhraseAction : KeyAction()

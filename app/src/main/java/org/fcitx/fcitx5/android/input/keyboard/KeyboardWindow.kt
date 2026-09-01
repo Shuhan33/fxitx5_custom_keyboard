@@ -458,6 +458,11 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     }
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
+        // Every newly shown keyboard starts from lowercase, regardless of the previous
+        // editor's one-shot Shift, Chinese Shift latch, or macro Caps Lock state.
+        service.setVirtualShiftLockState(false)
+        service.setVirtualCapsLockState(false)
+        (currentKeyboard as? TextKeyboard)?.resetCapsForNewInputSession()
         // Clear latched/one-shot layer state and the BACK layer history; the forced layout
         // slot is updated in one pass by TextKeyboard.setNumericLayoutKey below.
         latchedLayerKey = null

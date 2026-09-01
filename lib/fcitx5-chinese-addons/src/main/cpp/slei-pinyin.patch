@@ -83,6 +83,26 @@ index 513a8d4..5b25416 100644
      pyConfig_ = config_;
  }
  
+@@ -2045,6 +2091,19 @@ void PinyinEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
+         return;
+     }
+ 
++    // Android marks swipe-up digits and symbols as Virtual+NumLock. While a
++    // Chinese composition is active they belong to the raw composition buffer;
++    // do not let candidate or punctuation handling select and commit candidate 0.
++    if (event.isVirtual() &&
++        event.key().states().test(KeyState::NumLock) &&
++        !state->context_.empty() && !keyStr.get().empty() &&
++        !event.key().isLAZ() && !event.key().isUAZ()) {
++        event.filterAndAccept();
++        state->context_.type(keyStr.get());
++        updateUI(inputContext);
++        return;
++    }
++
+     // handle number key selection and prev/next page/candidate.
+     if (handleCandidateList(event, keyChr)) {
+         return;
 diff --git a/im/pinyin/pinyin.h b/im/pinyin/pinyin.h
 index 5ace603..9bb207f 100644
 --- a/im/pinyin/pinyin.h

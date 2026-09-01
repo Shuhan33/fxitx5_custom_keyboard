@@ -989,7 +989,6 @@ class TextKeyboard(
         get() = allViews.filterIsInstance(TextKeyView::class.java).toList()
 
     private var capsState: CapsState = CapsState.None
-    private var lastInputMethodLanguage = ime?.languageCode.orEmpty().lowercase()
 
     private fun isDisplayCapsOn(): Boolean {
         return capsState != CapsState.None || isSimulatedCapsLockOn()
@@ -1463,13 +1462,12 @@ class TextKeyboard(
 
     override fun onInputMethodUpdate(ime: InputMethodEntry) {
         val newLanguage = ime.languageCode.lowercase()
-        if (lastInputMethodLanguage.startsWith("zh") && !newLanguage.startsWith("zh")) {
+        if (!newLanguage.startsWith("zh")) {
             // Switching away from Chinese starts the Latin keyboard in its normal lowercase
             // state, independent from the persistent Chinese direct-uppercase latch.
             capsState = CapsState.None
             getService()?.setVirtualShiftLockState(false)
         }
-        lastInputMethodLanguage = newLanguage
         // update ime of companion object ime
         TextKeyboard.ime = ime
         val signature = layoutSignature(ime)
@@ -1480,6 +1478,11 @@ class TextKeyboard(
         // Re-find special key views after layout reload (or ensure initialized on first call)
         ensureSpecialKeyViewsInitialized()
         updateSpaceLabel(ime)
+        refreshCapsPresentation()
+    }
+
+    internal fun resetCapsForNewInputSession() {
+        capsState = CapsState.None
         refreshCapsPresentation()
     }
 

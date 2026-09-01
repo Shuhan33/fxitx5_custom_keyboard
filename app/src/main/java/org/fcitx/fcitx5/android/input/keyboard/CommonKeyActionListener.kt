@@ -10,6 +10,7 @@ import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
 import org.fcitx.fcitx5.android.core.FcitxAPI
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
+import org.fcitx.fcitx5.android.core.KeyState
 import org.fcitx.fcitx5.android.daemon.launchOnReady
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.broadcast.PreeditEmptyStateComponent
@@ -171,6 +172,24 @@ class CommonKeyActionListener :
                     // but never accept a prediction merely because a letter was pressed.
                     commitAndReset(includePredictionCandidates = false)
                     service.lifecycleScope.launch { service.commitText(action.text) }
+                }
+                is KeyAction.ComposeLiteralAction -> {
+                    val appendToChineseComposition =
+                        TextKeyboard.ime?.languageCode.orEmpty().lowercase().startsWith("zh") &&
+                            !preeditState.isEmpty
+                    if (appendToChineseComposition) {
+                        val codePoints = action.text.codePoints().toArray()
+                        service.postFcitxJob {
+                            for (codePoint in codePoints) {
+                                sendKey(
+                                    codePoint,
+                                    KeyState.Virtual.state or KeyState.NumLock.state
+                                )
+                            }
+                        }
+                    } else {
+                        service.lifecycleScope.launch { service.commitText(action.text) }
+                    }
                 }
                 is QuickPhraseAction -> service.postFcitxJob {
                     commitAndReset()

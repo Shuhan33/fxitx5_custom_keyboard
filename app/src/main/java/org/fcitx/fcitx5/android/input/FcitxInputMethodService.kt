@@ -1572,6 +1572,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         android.util.Log.i("FcitxColdStart", "service.onStartInputView restarting=$restarting")
         isInInputLifecycleCriticalPhase = true
         try {
+            // A newly shown soft keyboard is a fresh casing session. Clear both the
+            // local Shift presentation and virtual lock state before any view is reused.
+            TextKeyboard.clearCapsStateOnAll()
+            setVirtualShiftLockState(false)
+            setVirtualCapsLockState(false)
             val inputSessionGeneration = this.inputSessionGeneration
             Timber.d("onStartInputView: restarting=$restarting")
             postFcitxSessionJob(inputSessionGeneration) {

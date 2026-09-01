@@ -17,6 +17,30 @@ git checkout -- .
 git apply ../../../../../../plugin/rime/src/main/cpp/fcitx5-rime/fcitx5-alt-trigger-v4point1.patch || echo "fcitx5 patch already applied or failed"
 popd
 
+echo "applying slei pinyin patch"
+pushd lib/fcitx5-chinese-addons/src/main/cpp/fcitx5-chinese-addons
+if git apply --check ../slei-pinyin.patch; then
+    git apply ../slei-pinyin.patch
+elif git apply --reverse --check ../slei-pinyin.patch; then
+    echo "slei pinyin patch already applied"
+else
+    echo "slei pinyin patch does not apply cleanly" >&2
+    exit 1
+fi
+popd
+
+echo "applying slei history weight patch"
+pushd lib/libime/src/main/cpp/libime
+if git apply --check ../slei-history-weight.patch; then
+    git apply ../slei-history-weight.patch
+elif git apply --reverse --check ../slei-history-weight.patch; then
+    echo "slei history weight patch already applied"
+else
+    echo "slei history weight patch does not apply cleanly" >&2
+    exit 1
+fi
+popd
+
 # update prebuilt
 echo "updating prebuilt"
 pushd lib/fcitx5/src/main/cpp/prebuilt
