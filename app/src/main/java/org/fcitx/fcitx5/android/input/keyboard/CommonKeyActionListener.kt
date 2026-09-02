@@ -178,32 +178,29 @@ class CommonKeyActionListener :
                     service.lifecycleScope.launch { service.commitText(action.text) }
                 }
                 is KeyAction.ComposeLiteralAction -> {
-                    val isChinese =
-                        TextKeyboard.ime?.languageCode.orEmpty().lowercase().startsWith("zh")
-                    val composing =
-                        !preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0
-                    if (isChinese && !preeditState.isEmpty) {
-                        val codePoints = action.text.codePoints().toArray()
-                        service.postFcitxJob {
+                    val codePoints = action.text.codePoints().toArray()
+                    service.postFcitxJob {
+                        val isChinese = inputMethodEntryCached.languageCode
+                            .lowercase()
+                            .startsWith("zh")
+                        if (isChinese) {
+                            // Do not infer composition state from the asynchronously updated
+                            // candidate UI. Always send the marked literal to Pinyin: the engine
+                            // appends it to a live raw buffer and naturally falls back to normal
+                            // input when that buffer is empty.
                             for (codePoint in codePoints) {
                                 sendKey(
                                     codePoint,
                                     KeyState.Virtual.state or KeyState.NumLock.state
                                 )
                             }
-                        }
-                    } else if (composing) {
-                        // English prediction keeps the typed word as composing text. Finish it
-                        // before appending the swipe character so the word never vanishes or
-                        // gets replaced by a prediction. A prediction-only Chinese list is
-                        // dismissed without accepting its first item.
-                        service.postFcitxJob {
-                            if (!isChinese) service.finishComposing()
+                        } else {
+                            // English prediction keeps the typed word as composing text. Finish
+                            // it before appending the swipe character, then dismiss suggestions.
+                            service.finishComposing()
                             reset()
                             service.lifecycleScope.launch { service.commitText(action.text) }
                         }
-                    } else {
-                        service.lifecycleScope.launch { service.commitText(action.text) }
                     }
                 }
                 is QuickPhraseAction -> service.postFcitxJob {
