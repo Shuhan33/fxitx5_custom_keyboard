@@ -47,7 +47,7 @@ class PickerLayout(context: Context, theme: Theme, switchKey: KeyDef) :
     class Keyboard(context: Context, theme: Theme, switchKey: KeyDef) : BaseKeyboard(
         context, theme, {listOf(
             listOf(
-                LayoutSwitchKey("拼音", TextKeyboard.Name),
+                LayoutSwitchKey("键盘", TextKeyboard.Name),
                 PunctuationKey(","),
                 switchKey,
                 SpaceKey(),

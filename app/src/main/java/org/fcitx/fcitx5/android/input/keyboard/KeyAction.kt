@@ -94,6 +94,10 @@ sealed class KeyAction {
     /** Clear the current preedit/candidate composition without committing it. */
     data object ClearPreeditAction : KeyAction()
 
+    /** Start/end the context-sensitive backspace hold gesture. */
+    data object BackspaceHoldStartAction : KeyAction()
+    data object BackspaceHoldEndAction : KeyAction()
+
     data object ShowInputMethodPickerAction : KeyAction()
 
     data class LayoutSwitchAction(val act: String = "") : KeyAction()

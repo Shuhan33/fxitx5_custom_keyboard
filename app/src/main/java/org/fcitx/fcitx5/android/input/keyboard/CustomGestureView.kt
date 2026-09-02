@@ -88,6 +88,9 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
     var onRepeatListener: ((View) -> Unit)? = null
     var onGestureListener: OnGestureListener? = null
 
+    /** Optional delay for keys whose hold action should be harder to trigger accidentally. */
+    var holdDelayOverrideMillis: Long? = null
+
     var soundEffect: InputFeedbacks.SoundEffect = InputFeedbacks.SoundEffect.Standard
 
     private val touchSlop: Float = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
@@ -167,7 +170,10 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isEnabled) return false
-                val longPressDelayMillis = longPressDelay.toLong()
+                val longPressDelayMillis = maxOf(
+                    longPressDelay.toLong(),
+                    holdDelayOverrideMillis ?: 0L
+                )
                 drawableHotspotChanged(x, y)
                 isPressed = true
                 InputFeedbacks.hapticFeedback(this)

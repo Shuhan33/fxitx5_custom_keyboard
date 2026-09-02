@@ -317,7 +317,7 @@ class BackspaceKey(
     },
     setOf(
         Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_BackSpace))),
-        Behavior.LongPress(KeyAction.ClearPreeditAction)
+        Behavior.LongPress(KeyAction.BackspaceHoldStartAction)
     ),
     iconSlot = "keys.backspace"
 )

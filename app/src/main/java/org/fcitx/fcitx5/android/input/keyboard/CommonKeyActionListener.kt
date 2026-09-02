@@ -5,6 +5,9 @@
 
 package org.fcitx.fcitx5.android.input.keyboard
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.core.CapabilityFlag
 import org.fcitx.fcitx5.android.core.CapabilityFlags
@@ -72,6 +75,7 @@ class CommonKeyActionListener :
     private var backspaceSwipeState = Stopped
 
     private var voiceHoldActive = false
+    private var backspaceHoldJob: Job? = null
 
     // there should be a new fcitx API for this
     private suspend fun FcitxAPI.commitAndReset(includePredictionCandidates: Boolean = true) {
@@ -174,10 +178,11 @@ class CommonKeyActionListener :
                     service.lifecycleScope.launch { service.commitText(action.text) }
                 }
                 is KeyAction.ComposeLiteralAction -> {
-                    val appendToChineseComposition =
-                        TextKeyboard.ime?.languageCode.orEmpty().lowercase().startsWith("zh") &&
-                            !preeditState.isEmpty
-                    if (appendToChineseComposition) {
+                    val isChinese =
+                        TextKeyboard.ime?.languageCode.orEmpty().lowercase().startsWith("zh")
+                    val composing =
+                        !preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0
+                    if (isChinese && !preeditState.isEmpty) {
                         val codePoints = action.text.codePoints().toArray()
                         service.postFcitxJob {
                             for (codePoint in codePoints) {
@@ -186,6 +191,16 @@ class CommonKeyActionListener :
                                     KeyState.Virtual.state or KeyState.NumLock.state
                                 )
                             }
+                        }
+                    } else if (composing) {
+                        // English prediction keeps the typed word as composing text. Finish it
+                        // before appending the swipe character so the word never vanishes or
+                        // gets replaced by a prediction. A prediction-only Chinese list is
+                        // dismissed without accepting its first item.
+                        service.postFcitxJob {
+                            if (!isChinese) service.finishComposing()
+                            reset()
+                            service.lifecycleScope.launch { service.commitText(action.text) }
                         }
                     } else {
                         service.lifecycleScope.launch { service.commitText(action.text) }
@@ -206,6 +221,25 @@ class CommonKeyActionListener :
                     if (!preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0) {
                         service.postFcitxJob { reset() }
                     }
+                }
+                is KeyAction.BackspaceHoldStartAction -> {
+                    backspaceHoldJob?.cancel()
+                    val composing =
+                        !preeditState.isEmpty || horizontalCandidate.adapter.itemCount > 0
+                    if (composing) {
+                        service.postFcitxJob { reset() }
+                    } else {
+                        backspaceHoldJob = service.lifecycleScope.launch {
+                            while (isActive) {
+                                service.handleBackspaceDirectly()
+                                delay(50L)
+                            }
+                        }
+                    }
+                }
+                is KeyAction.BackspaceHoldEndAction -> {
+                    backspaceHoldJob?.cancel()
+                    backspaceHoldJob = null
                 }
                 is LangSwitchAction -> {
                     when (langSwitchKeyBehavior) {

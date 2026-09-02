@@ -189,6 +189,7 @@ abstract class BaseKeyboard(
 
     private companion object {
         const val MAX_CACHED_ROWS = 12
+        const val BACKSPACE_HOLD_DELAY_MILLIS = 650L
     }
 
     private var lastSplitLandscapeState = false
@@ -1696,6 +1697,7 @@ abstract class BaseKeyboard(
         view.onRepeatListener = null
         view.doubleTapEnabled = false
         view.onDoubleTapListener = null
+        view.holdDelayOverrideMillis = null
         view.swipeEnabled = baseline.swipeEnabled
         view.swipeRepeatEnabled = baseline.swipeRepeatEnabled
         view.swipeThresholdX = baseline.swipeThresholdX
@@ -1717,6 +1719,19 @@ abstract class BaseKeyboard(
                 }
                 is KeyDef.Behavior.LongPress -> {
                     hasLongPressBehavior = true
+                    if (it.action is KeyAction.BackspaceHoldStartAction) {
+                        // Clearing an active composition is destructive, so require a
+                        // deliberate hold. The same gesture repeats editor deletion when
+                        // there is no composition.
+                        view.holdDelayOverrideMillis = BACKSPACE_HOLD_DELAY_MILLIS
+                        val oldOnGestureListener = view.onGestureListener ?: OnGestureListener.Empty
+                        view.onGestureListener = OnGestureListener { currentView, event ->
+                            if (event.type == GestureType.Up) {
+                                onAction(KeyAction.BackspaceHoldEndAction)
+                            }
+                            oldOnGestureListener.onGesture(currentView, event)
+                        }
+                    }
                     view.setOnLongClickListener { _ ->
                         onAction(it.action)
                         true
@@ -1738,7 +1753,7 @@ abstract class BaseKeyboard(
                         when (event.type) {
                             GestureType.Up -> {
                                 if (!event.consumed && shouldTriggerSymbolBySwipe(currentView, event.totalY)) {
-                                    onAction(it.action)
+                                    dispatchSwipeAction(it.action)
                                     true
                                 } else {
                                     false
@@ -2061,6 +2076,16 @@ abstract class BaseKeyboard(
         }
     }
 
+    private fun dispatchSwipeAction(action: KeyAction) {
+        when (action) {
+            is MacroAction -> executeMacro(
+                preprocessMacroAction(action, KeyActionListener.Source.Keyboard),
+                composeLiteralText = true
+            )
+            else -> onAction(action)
+        }
+    }
+
     private fun shouldTriggerSymbolBySwipe(view: View, totalY: Int): Boolean {
         val altTextView = view as? SwipeHintAwareKeyView
         return altTextView?.shouldTriggerAltBySwipe(totalY, swipeSymbolDirection)
@@ -2076,7 +2101,7 @@ abstract class BaseKeyboard(
      * Execute a Macro action
      * @param macroAction the MacroAction to execute
      */
-    private fun executeMacro(macroAction: MacroAction) {
+    private fun executeMacro(macroAction: MacroAction, composeLiteralText: Boolean = false) {
         findViewTreeLifecycleOwner()?.lifecycleScope?.launch {
             Timber.v("executeMacro: steps=%d", macroAction.steps.size)
 
@@ -2125,7 +2150,14 @@ abstract class BaseKeyboard(
                     }
                     is MacroStep.Text -> {
                         Timber.v("executeMacro: Text length=%d", step.text.length)
-                        commitText(step.text)
+                        if (composeLiteralText) {
+                            keyActionListener?.onKeyAction(
+                                KeyAction.ComposeLiteralAction(step.text),
+                                KeyActionListener.Source.Keyboard
+                            )
+                        } else {
+                            commitText(step.text)
+                        }
                     }
                     is MacroStep.Edit -> {
                         Timber.v("executeMacro: Edit action=%s", step.action)
