@@ -47,6 +47,9 @@
 #include "helper-types.h"
 #include "object-conversion.h"
 
+namespace {
+constexpr int SLEI_COMPOSE_LITERAL_KEY_CODE = 0x5E10;
+}
 
 class Fcitx {
 public:
@@ -113,6 +116,15 @@ public:
 
     void sendKey(fcitx::Key key, bool up, int timestamp) {
         p_frontend->call<fcitx::IAndroidFrontend::keyEvent>(key, up, timestamp);
+    }
+
+    void sendComposeLiteral(fcitx::KeySym sym) {
+        const fcitx::Key key{
+            sym,
+            fcitx::KeyStates(fcitx::KeyState::Virtual),
+            SLEI_COMPOSE_LITERAL_KEY_CODE
+        };
+        p_frontend->call<fcitx::IAndroidFrontend::keyEvent>(key, false, -1);
     }
 
     bool select(int idx) {
@@ -791,6 +803,13 @@ Java_org_fcitx_fcitx5_android_core_Fcitx_sendKeySymToFcitx(JNIEnv *env, jclass c
                    fcitx::KeyStates(static_cast<uint32_t>(state)),
                    code + /* evdev offset */ 8};
     Fcitx::Instance().sendKey(key, up, timestamp);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_org_fcitx_fcitx5_android_core_Fcitx_sendComposeLiteralToFcitx(JNIEnv *env, jclass clazz, jint sym) {
+    RETURN_IF_NOT_RUNNING
+    Fcitx::Instance().sendComposeLiteral(fcitx::KeySym(static_cast<uint32_t>(sym)));
 }
 
 extern "C"

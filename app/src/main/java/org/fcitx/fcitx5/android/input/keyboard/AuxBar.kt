@@ -8,5 +8,9 @@ enum class AuxBarPosition { Top, Bottom, Left, Right, AbovePreedit }
 
 data class AuxBarConfig(
     val position: AuxBarPosition,
-    val sizePercent: Float
+    val sizePercent: Float,
+    /** Keep layout-provided keys visible even when the engine publishes tab actions. */
+    val alwaysShowCustomKeys: Boolean = false,
+    /** Number of custom keys shown before scrolling; null keeps normal key sizing. */
+    val scrollableVisibleKeyCount: Int? = null
 )

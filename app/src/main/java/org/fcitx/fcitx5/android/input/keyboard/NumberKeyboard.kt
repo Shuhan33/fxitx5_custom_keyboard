@@ -17,45 +17,68 @@ import splitties.views.imageResource
 class NumberKeyboard(
     context: Context,
     theme: Theme,
-) : BaseKeyboard(context, theme, ::Layout, { null }) {
+) : BaseKeyboard(
+    context,
+    theme,
+    ::Layout,
+    { AuxConfig },
+    ::ScrollableSymbols,
+    ::PinnedSymbols
+) {
 
     override fun currentLayoutSignature(): String = Name
 
     companion object {
         const val Name = "Number"
-        private const val SideKeyWidth = 0.205f
-        private const val DigitKeyWidth = (1f - SideKeyWidth * 2f) / 3f
+        private const val KeyWidth = 0.25f
+
+        val AuxConfig = AuxBarConfig(
+            position = AuxBarPosition.Left,
+            sizePercent = 17f,
+            alwaysShowCustomKeys = true,
+            scrollableVisibleKeyCount = 4
+        )
+
+        val ScrollableSymbols: List<KeyDef> = listOf(
+            NumPadKey("+", 0xffab, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey("−", 0xffad, 25f, 1f, KeyDef.Appearance.Variant.Alternative, inputText = "-"),
+            NumPadKey("×", 0xffaa, 25f, 1f, KeyDef.Appearance.Variant.Alternative, inputText = "*"),
+            NumPadKey("/", 0xffaf, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey("(", 0x28, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey(")", 0x29, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey(".", 0x2e, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey("@", 0x40, 25f, 1f, KeyDef.Appearance.Variant.Alternative),
+            NumPadKey("%", 0x25, 25f, 1f, KeyDef.Appearance.Variant.Alternative)
+        )
+
+        val PinnedSymbols: List<KeyDef> = listOf(
+            LayoutSwitchKey("符号", PickerWindow.Key.Symbol.name, 1f)
+        )
 
         val Layout: List<List<KeyDef>> = listOf(
             listOf(
-                NumPadKey("+", 0xffab, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
-                NumPadKey("1", 0xffb1, 30f, DigitKeyWidth),
-                NumPadKey("2", 0xffb2, 30f, DigitKeyWidth),
-                NumPadKey("3", 0xffb3, 30f, DigitKeyWidth),
-                BackspaceKey(SideKeyWidth),
+                NumPadKey("1", 0xffb1, 30f, KeyWidth),
+                NumPadKey("2", 0xffb2, 30f, KeyWidth),
+                NumPadKey("3", 0xffb3, 30f, KeyWidth),
+                BackspaceKey(KeyWidth),
             ),
             listOf(
-                NumPadKey("-", 0xffad, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
-                NumPadKey("4", 0xffb4, 30f, DigitKeyWidth),
-                NumPadKey("5", 0xffb5, 30f, DigitKeyWidth),
-                NumPadKey("6", 0xffb6, 30f, DigitKeyWidth),
-                NumPadKey("/", 0xffaf, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
+                NumPadKey("4", 0xffb4, 30f, KeyWidth),
+                NumPadKey("5", 0xffb5, 30f, KeyWidth),
+                NumPadKey("6", 0xffb6, 30f, KeyWidth),
+                NumPadKey("@", 0x40, 25f, KeyWidth, KeyDef.Appearance.Variant.Alternative),
             ),
             listOf(
-                NumPadKey("*", 0xffaa, 23f, SideKeyWidth, KeyDef.Appearance.Variant.Alternative),
-                NumPadKey("7", 0xffb7, 30f, DigitKeyWidth),
-                NumPadKey("8", 0xffb8, 30f, DigitKeyWidth),
-                NumPadKey("9", 0xffb9, 30f, DigitKeyWidth),
-                MiniSpaceKey(SideKeyWidth)
+                NumPadKey("7", 0xffb7, 30f, KeyWidth),
+                NumPadKey("8", 0xffb8, 30f, KeyWidth),
+                NumPadKey("9", 0xffb9, 30f, KeyWidth),
+                NumPadKey(".", 0x2e, 25f, KeyWidth, KeyDef.Appearance.Variant.Alternative)
             ),
             listOf(
-                LayoutSwitchKey("!?#", PickerWindow.Key.Symbol.name, 0.12f, KeyDef.Appearance.Variant.AltForeground),
-                LayoutSwitchKey("键盘", TextKeyboard.Name, 0.12f),
-                NumPadKey(",", 0xffac, 23f, 0.1f, KeyDef.Appearance.Variant.Alternative),
-                NumPadKey("0", 0xffb0, 30f, 0.27667f),
-                NumPadKey("=", 0xffbd, 23f, 0.13333f, KeyDef.Appearance.Variant.AltForeground),
-                NumPadKey(".", 0xffae, 23f, 0.1f, KeyDef.Appearance.Variant.Alternative),
-                ReturnKey()
+                LayoutSwitchKey("键盘", TextKeyboard.Name, KeyWidth),
+                NumPadKey("0", 0xffb0, 30f, KeyWidth),
+                MiniSpaceKey(KeyWidth),
+                ReturnKey(KeyWidth)
             )
         )
     }

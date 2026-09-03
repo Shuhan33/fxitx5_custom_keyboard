@@ -97,7 +97,8 @@ abstract class BaseKeyboard(
     protected var theme: Theme,
     private val layoutProvider: () ->List<List<KeyDef>>,
     private val auxBarConfigProvider: () -> AuxBarConfig? = { null },
-    private val auxBarKeysProvider: () -> List<KeyDef> = { emptyList() }
+    private val auxBarKeysProvider: () -> List<KeyDef> = { emptyList() },
+    private val auxBarPinnedKeysProvider: () -> List<KeyDef> = { emptyList() }
 ) : ConstraintLayout(context) {
 
     private val keyLayout: List<List<KeyDef>>
@@ -106,6 +107,8 @@ abstract class BaseKeyboard(
         get() = auxBarConfigProvider()
     private val auxBarKeyDefs: List<KeyDef>
         get() = auxBarKeysProvider()
+    private val auxBarPinnedKeyDefs: List<KeyDef>
+        get() = auxBarPinnedKeysProvider()
     var keyActionListener: KeyActionListener? = null
     var auxBarListener: ((List<AuxBarAction>, List<AuxBarAction>) -> Unit)? = null
 
@@ -153,6 +156,8 @@ abstract class BaseKeyboard(
     private var auxBarPinnedAdapter: AuxBarAdapter? = null
     private var auxBarScrollableRv: RecyclerView? = null
     private var auxBarKeyAdapter: AuxBarKeyAdapter? = null
+    private var auxBarPinnedRv: RecyclerView? = null
+    private var auxBarPinnedKeyAdapter: AuxBarKeyAdapter? = null
     private var mainGridContainer: ConstraintLayout? = null
 
     private data class GestureBaseline(
@@ -325,6 +330,8 @@ abstract class BaseKeyboard(
         auxBarPinnedAdapter = null
         auxBarScrollableRv = null
         auxBarKeyAdapter = null
+        auxBarPinnedRv = null
+        auxBarPinnedKeyAdapter = null
         mainGridContainer = null
         cachedWaterRippleColor = null
         keyboardWaterRippleView = KeyboardWaterRippleView(context).also { rippleView ->
@@ -399,6 +406,12 @@ abstract class BaseKeyboard(
             }
             scrollableRv.adapter = scrollableAdapter
             val keyAdapter = AuxBarKeyAdapter(
+                vertical = isVertical,
+                keyViewFactory = { def ->
+                    createKeyView(def, registerComposeAware = false).also(::applyConfiguredFonts)
+                }
+            )
+            val pinnedKeyAdapter = AuxBarKeyAdapter(
                 vertical = isVertical,
                 keyViewFactory = { def ->
                     createKeyView(def, registerComposeAware = false).also(::applyConfiguredFonts)
@@ -505,6 +518,8 @@ abstract class BaseKeyboard(
             auxBarPinnedAdapter = pinnedAdapter
             auxBarScrollableRv = scrollableRv
             auxBarKeyAdapter = keyAdapter
+            auxBarPinnedRv = pinnedRv
+            auxBarPinnedKeyAdapter = pinnedKeyAdapter
             mainGridContainer = mainGrid
             // Keep aux bar usable before first candidate update (e.g. in preview or idle startup):
             // if no tabs are available, show configured fallback keys immediately.
@@ -521,7 +536,17 @@ abstract class BaseKeyboard(
                         if (rowHeight > 0) {
                             // KeyView already includes key vertical margins in its own drawing logic,
                             // so use full row height to keep aux bar key height aligned with normal rows.
-                            keyAdapter.setMinItemHeight(rowHeight)
+                            val visibleKeyCount = auxBarConfig.scrollableVisibleKeyCount
+                            val scrollableKeyHeight = if (
+                                isVertical && visibleKeyCount != null &&
+                                visibleKeyCount > 0 && scrollableRv.height > 0
+                            ) {
+                                scrollableRv.height / visibleKeyCount
+                            } else {
+                                rowHeight
+                            }
+                            keyAdapter.setMinItemHeight(scrollableKeyHeight)
+                            pinnedKeyAdapter.setMinItemHeight(rowHeight)
                         }
                     }
                     auxBarScrollableAdapter?.applyConfiguredFonts(scrollableRv)
@@ -569,27 +594,33 @@ abstract class BaseKeyboard(
     private fun applyAuxBarContent(scrollable: List<AuxBarAction>, pinned: List<AuxBarAction>) {
         val cfg = auxBarConfig ?: return
         val customKeys = auxBarKeyDefs
+        val pinnedCustomKeys = auxBarPinnedKeyDefs
         val hasTabs = scrollable.isNotEmpty() || pinned.isNotEmpty()
-        val maxKeyCount = when (cfg.position) {
-            AuxBarPosition.Left, AuxBarPosition.Right -> keyRows.size
-            else -> Int.MAX_VALUE
-        }
-        val visibleCustomKeys = customKeys.take(maxKeyCount)
-        if (!hasTabs && visibleCustomKeys.isNotEmpty() && auxBarKeyAdapter != null) {
-            // No tabs: fill the aux bar with the user-configured custom keys.
-            // For left/right aux bar, clamp count to keyboard row count.
+        val useCustomKeys = (cfg.alwaysShowCustomKeys || !hasTabs) &&
+            (customKeys.isNotEmpty() || pinnedCustomKeys.isNotEmpty())
+        if (useCustomKeys && auxBarKeyAdapter != null) {
+            // Vertical custom bars intentionally keep every key: RecyclerView supplies
+            // real inertial scrolling instead of silently truncating after row count.
             val rv = auxBarScrollableRv
             if (rv?.adapter != auxBarKeyAdapter) {
                 rv?.adapter = auxBarKeyAdapter
             }
-            auxBarKeyAdapter?.updateKeys(visibleCustomKeys)
-            auxBarPinnedAdapter?.updateActions(emptyList())
+            auxBarKeyAdapter?.updateKeys(customKeys)
+            val pinnedRv = auxBarPinnedRv
+            if (pinnedRv?.adapter != auxBarPinnedKeyAdapter) {
+                pinnedRv?.adapter = auxBarPinnedKeyAdapter
+            }
+            auxBarPinnedKeyAdapter?.updateKeys(pinnedCustomKeys)
         } else {
             val rv = auxBarScrollableRv
             if (rv?.adapter != auxBarScrollableAdapter) {
                 rv?.adapter = auxBarScrollableAdapter
             }
             auxBarScrollableAdapter?.updateActions(scrollable)
+            val pinnedRv = auxBarPinnedRv
+            if (pinnedRv?.adapter != auxBarPinnedAdapter) {
+                pinnedRv?.adapter = auxBarPinnedAdapter
+            }
             auxBarPinnedAdapter?.updateActions(pinned)
         }
     }
@@ -3028,12 +3059,17 @@ class AuxBarKeyAdapter(
                 container.removeAllViews()
                 current = keyViewFactory(key).also { created ->
                     created.setOnTouchListener { v, event ->
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                                v.parent?.requestDisallowInterceptTouchEvent(true)
-                            }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                v.parent?.requestDisallowInterceptTouchEvent(false)
+                        // A vertical custom bar is a real RecyclerView: let it take over once
+                        // movement exceeds touch slop so taps still reach the key while drags
+                        // scroll naturally. Horizontal bars keep their established behavior.
+                        if (!vertical) {
+                            when (event.actionMasked) {
+                                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                                }
+                                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                                }
                             }
                         }
                         false

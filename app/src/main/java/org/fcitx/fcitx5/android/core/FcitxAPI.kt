@@ -52,6 +52,9 @@ interface FcitxAPI {
 
     suspend fun sendKey(sym: KeySym, states: KeyStates, code: Int = 0, up: Boolean = false, timestamp: Int = -1)
 
+    /** Send a literal produced by a keyboard gesture without candidate-key ambiguity. */
+    suspend fun sendComposeLiteral(sym: Int)
+
     suspend fun select(idx: Int): Boolean
     suspend fun isEmpty(): Boolean
     suspend fun reset()

@@ -17,6 +17,10 @@
 namespace fcitx {
 
 namespace {
+constexpr int SLEI_COMPOSE_LITERAL_KEY_CODE = 0x5E10;
+}
+
+namespace {
 
 class AndroidKeyboardCandidateWord : public CandidateWord {
 public:
@@ -84,6 +88,18 @@ void AndroidKeyboardEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &ev
     auto *inputContext = event.inputContext();
     auto *state = inputContext->propertyFor(&factory_);
     auto &buffer = state->buffer_;
+
+    if (key.code() == SLEI_COMPOSE_LITERAL_KEY_CODE) {
+        event.filterAndAccept();
+        // Preserve the whole English preedit, dismiss its predictions, and then
+        // append the gesture literal in one ordered engine transaction.
+        commitBuffer(inputContext);
+        const auto literal = Key::keySymToUTF8(key.sym());
+        if (!literal.empty()) {
+            inputContext->commitString(literal);
+        }
+        return;
+    }
 
     // check if we can select candidate.
     if (auto candList = inputContext->inputPanel().candidateList()) {

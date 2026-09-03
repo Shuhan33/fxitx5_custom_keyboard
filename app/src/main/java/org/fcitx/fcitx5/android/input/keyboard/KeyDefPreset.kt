@@ -8,8 +8,6 @@ import android.graphics.Typeface
 import androidx.annotation.DrawableRes
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
-import org.fcitx.fcitx5.android.core.KeyState
-import org.fcitx.fcitx5.android.core.KeyStates
 import org.fcitx.fcitx5.android.core.KeySym
 import org.fcitx.fcitx5.android.data.InputFeedbacks
 import org.fcitx.fcitx5.android.input.keyboard.KeyDef.Appearance.Border
@@ -20,8 +18,6 @@ import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.keyboard.MacroAction
 import org.fcitx.fcitx5.android.input.keyboard.MacroStep
 import org.fcitx.fcitx5.android.input.keyboard.KeyRef
-
-val NumLockState = KeyStates(KeyState.NumLock, KeyState.Virtual)
 
 class SymbolKey(
     val symbol: String,
@@ -623,7 +619,8 @@ class NumPadKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    val inputText: String = displayText
 ) : KeyDef(
     Appearance.Text(
         displayText,
@@ -638,7 +635,7 @@ class NumPadKey(
         shadowColorMonet = shadowColorMonet
     ),
     setOf(
-        Behavior.Press(KeyAction.SymAction(KeySym(sym), NumLockState))
+        Behavior.Press(KeyAction.ComposeLiteralAction(inputText))
     )
 )
 

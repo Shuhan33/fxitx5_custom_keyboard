@@ -180,26 +180,11 @@ class CommonKeyActionListener :
                 is KeyAction.ComposeLiteralAction -> {
                     val codePoints = action.text.codePoints().toArray()
                     service.postFcitxJob {
-                        val isChinese = inputMethodEntryCached.languageCode
-                            .lowercase()
-                            .startsWith("zh")
-                        if (isChinese) {
-                            // Do not infer composition state from the asynchronously updated
-                            // candidate UI. Always send the marked literal to Pinyin: the engine
-                            // appends it to a live raw buffer and naturally falls back to normal
-                            // input when that buffer is empty.
-                            for (codePoint in codePoints) {
-                                sendKey(
-                                    codePoint,
-                                    KeyState.Virtual.state or KeyState.NumLock.state
-                                )
-                            }
-                        } else {
-                            // English prediction keeps the typed word as composing text. Finish
-                            // it before appending the swipe character, then dismiss suggestions.
-                            service.finishComposing()
-                            reset()
-                            service.lifecycleScope.launch { service.commitText(action.text) }
+                        // The dedicated native event is handled by the active engine. This avoids
+                        // guessing the language from asynchronously updated UI/IME metadata and
+                        // cannot be mistaken for a numeric candidate-selection shortcut.
+                        for (codePoint in codePoints) {
+                            sendComposeLiteral(codePoint)
                         }
                     }
                 }

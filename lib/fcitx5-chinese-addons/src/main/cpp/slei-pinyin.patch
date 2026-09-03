@@ -15,6 +15,17 @@ index 513a8d4..5b25416 100644
   */
  
  #include "pinyin.h"
+@@ -100,6 +104,10 @@
+ 
+ namespace fcitx {
+ 
++namespace {
++constexpr int SLEI_COMPOSE_LITERAL_KEY_CODE = 0x5E10;
++}
++
+ namespace {
+ 
+ FCITX_DEFINE_LOG_CATEGORY(pinyin, "pinyin");
 @@ -545,15 +549,47 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
              selectedLength <= context.cursor()) {
              auto [hasUpper, engNess] =
@@ -83,20 +94,22 @@ index 513a8d4..5b25416 100644
      pyConfig_ = config_;
  }
  
-@@ -1999,6 +2045,19 @@ void PinyinEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
+@@ -1999,6 +2049,21 @@ void PinyinEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
          return;
      }
  
-+    // Android marks swipe-up digits and symbols with NumLock. Intercept them
-+    // before punctuation, compose, and candidate-selection handlers: while a
-+    // Pinyin composition is active they are literal nodes in the raw buffer,
-+    // so input such as wo'aini1gerf remains selectable as 我爱你1个人.
-+    if (event.key().states().test(KeyState::NumLock) &&
-+        !state->context_.empty() && !keyStr.get().empty() &&
-+        !event.key().isLAZ() && !event.key().isUAZ()) {
++    // A dedicated Android gesture event cannot be confused with numeric
++    // candidate selection. In an active composition the character becomes a
++    // literal graph node, so wo'aini1gerf remains selectable as 我爱你1个人.
++    if (event.key().code() == SLEI_COMPOSE_LITERAL_KEY_CODE &&
++        !keyStr.get().empty()) {
 +        event.filterAndAccept();
-+        state->context_.type(keyStr.get());
-+        updateUI(inputContext);
++        if (state->context_.empty()) {
++            inputContext->commitString(keyStr.get());
++        } else {
++            state->context_.type(keyStr.get());
++            updateUI(inputContext);
++        }
 +        return;
 +    }
 +

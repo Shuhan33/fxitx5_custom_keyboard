@@ -102,6 +102,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
     ) =
         withFcitxContext { sendKeySymToFcitx(sym.sym, states.toInt(), code, up, timestamp) }
 
+    override suspend fun sendComposeLiteral(sym: Int) =
+        withFcitxContext { sendComposeLiteralToFcitx(sym) }
+
     override suspend fun select(idx: Int): Boolean = withFcitxContext { selectCandidate(idx) }
     override suspend fun isEmpty(): Boolean = withFcitxContext { isInputPanelEmpty() }
     override suspend fun reset() = withFcitxContext { resetInputContext() }
@@ -271,6 +274,9 @@ class Fcitx(private val context: Context) : FcitxAPI, FcitxLifecycleOwner {
 
         @JvmStatic
         external fun sendKeySymToFcitx(sym: Int, state: Int, code: Int, up: Boolean, timestamp: Int)
+
+        @JvmStatic
+        external fun sendComposeLiteralToFcitx(sym: Int)
 
         @JvmStatic
         external fun selectCandidate(idx: Int): Boolean
