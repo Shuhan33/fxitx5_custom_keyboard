@@ -150,6 +150,7 @@ class CommonKeyActionListener :
                     val deleteAfterDismissingPrediction =
                         action.sym.sym == FcitxKeyMapping.FcitxKey_BackSpace &&
                             preeditState.isEmpty &&
+                            !horizontalCandidate.hasLocalSuggestions() &&
                             horizontalCandidate.adapter.itemCount > 0
                     service.postFcitxJob {
                         sendKey(action.sym, action.states)
@@ -220,8 +221,7 @@ class CommonKeyActionListener :
                     }
                 }
                 is KeyAction.BackspaceHoldEndAction -> {
-                    backspaceHoldJob?.cancel()
-                    backspaceHoldJob = null
+                    cancelOngoingActions()
                 }
                 is LangSwitchAction -> {
                     when (langSwitchKeyBehavior) {
@@ -312,5 +312,12 @@ class CommonKeyActionListener :
                 else -> {}
             }
         }
+    }
+
+    fun cancelOngoingActions() {
+        backspaceHoldJob?.cancel()
+        backspaceHoldJob = null
+        backspaceSwipeState = Stopped
+        voiceHoldActive = false
     }
 }

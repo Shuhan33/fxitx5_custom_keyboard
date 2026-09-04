@@ -118,7 +118,8 @@ public:
         p_frontend->call<fcitx::IAndroidFrontend::keyEvent>(key, up, timestamp);
     }
 
-    void sendComposeLiteral(fcitx::KeySym sym) {
+    void sendComposeLiteral(uint32_t unicode) {
+        const auto sym = fcitx::Key::keySymFromUnicode(unicode);
         const fcitx::Key key{
             sym,
             fcitx::KeyStates(fcitx::KeyState::Virtual),
@@ -809,7 +810,7 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_org_fcitx_fcitx5_android_core_Fcitx_sendComposeLiteralToFcitx(JNIEnv *env, jclass clazz, jint sym) {
     RETURN_IF_NOT_RUNNING
-    Fcitx::Instance().sendComposeLiteral(fcitx::KeySym(static_cast<uint32_t>(sym)));
+    Fcitx::Instance().sendComposeLiteral(static_cast<uint32_t>(sym));
 }
 
 extern "C"

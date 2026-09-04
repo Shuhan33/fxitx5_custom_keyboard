@@ -262,7 +262,7 @@ class ClipboardWindow(
         )
     ) {
         if (query.isNotBlank()) {
-            ClipboardManager.searchEntries(query.trim())
+            ClipboardManager.searchEntries(query.trim(), category)
         } else when (category) {
             ClipboardCategory.All -> ClipboardManager.allEntries()
             ClipboardCategory.Favorites -> ClipboardManager.favoriteEntries()

@@ -76,10 +76,24 @@ class HorizontalCandidateComponent :
     private var localSuggestionSuffixes: List<String>? = null
 
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
-        // New input session should not inherit paged-candidate flow state from previous one.
+        // A new editor must never inherit candidates or local suggestions from the previous one.
+        pendingLegacyCandidateUpdate?.let(view::removeCallbacks)
+        pendingLegacyCandidateUpdate = null
+        localSuggestionSuffixes = null
         pagedCandidateFlowActive = false
         lastPagedEventUptimeMs = 0L
         lastPagedData = null
+        lastPagedCandidatesSnapshot = emptyList()
+        lastPagedCursor = -1
+        lastPagedHasPrev = false
+        lastRenderedCandidatesSnapshot = emptyList()
+        lastRenderedActiveIndex = Int.MIN_VALUE
+        highlightMovedInCurrentComposition = false
+        prefetchInFlight = false
+        prefetchExhaustedForSnapshot = false
+        adapter.updateCandidates(emptyArray(), 0, -1, 0)
+        layoutManager.scrollToPositionWithOffset(0, 0)
+        refreshExpanded()
     }
 
     // Since expanded candidate window is created once the expand button was clicked,
@@ -209,9 +223,13 @@ class HorizontalCandidateComponent :
         object : RecyclerView(context) {
             override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
                 super.onSizeChanged(w, h, oldw, oldh)
-                if (fillStyle == AutoFillWidth) {
-                    val maxSpanCount = maxSpanCountPref.getValue()
-                    layoutMinWidth = w / maxSpanCount - dividerDrawable.intrinsicWidth
+                if (w > 0 && w != oldw) {
+                    val candidateAdapter = this@HorizontalCandidateComponent.adapter
+                    val oldMinWidth = layoutMinWidth
+                    updateLayoutMinWidth(w, candidateAdapter.itemCount)
+                    if (oldMinWidth != layoutMinWidth && candidateAdapter.itemCount > 0) {
+                        candidateAdapter.notifyItemRangeChanged(0, candidateAdapter.itemCount)
+                    }
                 }
             }
         }.apply {
@@ -336,22 +354,8 @@ class HorizontalCandidateComponent :
         total: Int,
         activeIndex: Int,
     ) {
-        val maxSpanCount = maxSpanCountPref.getValue()
         val visibleCount = candidates.size.coerceAtMost(HorizontalLimit).coerceAtLeast(1)
-        when (fillStyle) {
-            NeverFillWidth -> {
-                layoutMinWidth = 0
-            }
-            AutoFillWidth -> {
-                val spanCount = visibleCount.coerceAtMost(maxSpanCount)
-                layoutMinWidth =
-                    (view.width / spanCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
-            }
-            AlwaysFillWidth -> {
-                layoutMinWidth =
-                    (view.width / visibleCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
-            }
-        }
+        updateLayoutMinWidth(view.width, visibleCount)
         val capped = if (candidates.size > HorizontalLimit) {
             candidates.copyOfRange(0, HorizontalLimit)
         } else {
@@ -380,6 +384,24 @@ class HorizontalCandidateComponent :
         }
     }
 
+    private fun updateLayoutMinWidth(width: Int, candidateCount: Int) {
+        val visibleCount = candidateCount.coerceAtMost(HorizontalLimit).coerceAtLeast(1)
+        when (fillStyle) {
+            NeverFillWidth -> {
+                layoutMinWidth = 0
+            }
+            AutoFillWidth -> {
+                val spanCount = visibleCount.coerceAtMost(maxSpanCountPref.getValue())
+                layoutMinWidth =
+                    (width / spanCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
+            }
+            AlwaysFillWidth -> {
+                layoutMinWidth =
+                    (width / visibleCount - dividerDrawable.intrinsicWidth).coerceAtLeast(0)
+            }
+        }
+    }
+
     fun showEmailSuggestions(suggestions: List<EmailSuggestion>) {
         if (suggestions.isEmpty()) {
             dismissLocalSuggestions()
@@ -398,4 +420,6 @@ class HorizontalCandidateComponent :
         bar.onCandidateUpdate(FcitxEvent.CandidateListEvent.Data(0, emptyArray()))
         return true
     }
+
+    fun hasLocalSuggestions(): Boolean = localSuggestionSuffixes != null
 }

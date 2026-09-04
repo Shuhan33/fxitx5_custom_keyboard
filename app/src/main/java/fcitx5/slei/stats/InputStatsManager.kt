@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -255,7 +256,34 @@ object InputStatsManager {
         flushJob?.cancel()
         flushJob = scope.launch {
             delay(FLUSH_DELAY_MS)
-            mutex.withLock { writeLocked() }
+            mutex.withLock {
+                writeLocked()
+                flushJob = null
+            }
+        }
+    }
+
+    /** Persist pending counters when an editor session finishes. */
+    fun flush() {
+        if (!::applicationContext.isInitialized) return
+        scope.launch {
+            mutex.withLock {
+                flushJob?.cancel()
+                flushJob = null
+                if (loaded) writeLocked()
+            }
+        }
+    }
+
+    /** Final synchronous flush for service teardown, where an async job may be cancelled by process death. */
+    fun flushBlocking() {
+        if (!::applicationContext.isInitialized) return
+        runBlocking(Dispatchers.IO) {
+            mutex.withLock {
+                flushJob?.cancel()
+                flushJob = null
+                if (loaded) writeLocked()
+            }
         }
     }
 

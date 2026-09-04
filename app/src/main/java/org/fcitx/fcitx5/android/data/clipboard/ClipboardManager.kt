@@ -242,9 +242,21 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
 
     fun allEntries() = clbDao.allEntries()
 
-    fun searchEntries(query: String): androidx.paging.PagingSource<Int, ClipboardEntry> {
+    fun searchEntries(
+        query: String,
+        category: ClipboardCategory = ClipboardCategory.All
+    ): androidx.paging.PagingSource<Int, ClipboardEntry> {
         val escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        return clbDao.searchEntries("%$escaped%")
+        val pattern = "%$escaped%"
+        return when (category) {
+            ClipboardCategory.All -> clbDao.searchEntries(pattern)
+            ClipboardCategory.Favorites -> clbDao.searchFavoriteEntries(pattern)
+            ClipboardCategory.Local ->
+                clbDao.searchTextEntriesBySource(ClipboardEntry.SOURCE_LOCAL, pattern)
+            ClipboardCategory.Remote ->
+                clbDao.searchEntriesBySource(ClipboardEntry.SOURCE_REMOTE, pattern)
+            ClipboardCategory.Media -> clbDao.searchMediaEntries(pattern)
+        }
     }
 
     fun favoriteEntries() = clbDao.favoriteEntries()

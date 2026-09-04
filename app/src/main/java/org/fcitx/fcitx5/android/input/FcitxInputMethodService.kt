@@ -161,6 +161,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val candidatesView: CandidatesView
     )
     private var preparedViews: PreparedViews? = null
+    private val prewarmInputViewsRunnable = Runnable(::prewarmInputViews)
 
     private val navbarMgr = NavigationBarManager()
     internal val inputDeviceManager = InputDeviceManager(
@@ -363,7 +364,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     private fun replaceInputViews(theme: Theme) {
-        val prepared = preparedViews?.takeIf { it.theme === theme }
+        val cached = preparedViews
+        val prepared = cached?.takeIf { it.theme === theme }
+        if (cached != null && prepared == null) {
+            cached.inputView.disposePrepared()
+        }
         preparedViews = null
         window.window?.let {
             navbarMgr.evaluate(it, inputDeviceManager.isVirtualKeyboard)
@@ -382,6 +387,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val duration = SystemClock.elapsedRealtime() - startedAt
         SleiPerformanceMetrics.recordViewPrewarm(duration)
         android.util.Log.i("FcitxColdStart", "idle view prewarm duration=${duration}ms")
+    }
+
+    private fun discardPreparedViews() {
+        preparedViews?.inputView?.disposePrepared()
+        preparedViews = null
     }
 
     /**
@@ -569,7 +579,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         // Spend that idle window constructing the expensive key hierarchy so onCreateInputView
         // only attaches already-built views. This stays on the main thread because Android View
         // objects must never be created from a worker thread.
-        contentView.post(::prewarmInputViews)
+        contentView.post(prewarmInputViewsRunnable)
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -1915,6 +1925,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             VoiceInputProviderManager.stop(this)
         }
         decorLocationUpdated = false
+        inputView?.cancelOngoingKeyActions()
+        InputStatsManager.flush()
         inputDeviceManager.onFinishInputView()
         currentInputConnection?.apply {
             finishComposingText()
@@ -1932,6 +1944,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onFinishInput() {
         Timber.d("onFinishInput")
         MainService.stopSyncService(this)
+        inputView?.cancelOngoingKeyActions()
+        InputStatsManager.flush()
         val inputSessionGeneration = this.inputSessionGeneration
         postFcitxSessionJob(inputSessionGeneration) {
             focus(false)
@@ -1955,6 +1969,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onDestroy() {
         MainService.stopSyncService(this)
+        if (this::contentView.isInitialized) {
+            contentView.removeCallbacks(prewarmInputViewsRunnable)
+        }
+        discardPreparedViews()
+        inputView?.cancelOngoingKeyActions()
+        InputStatsManager.flushBlocking()
         recreateInputViewPrefs.forEach {
             it.unregisterOnChangeListener(recreateInputViewListener)
         }

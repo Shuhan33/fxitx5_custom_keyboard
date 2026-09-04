@@ -425,6 +425,7 @@ abstract class BaseKeyboard(
             scrollableRv.adapter = scrollableAdapter
             val keyAdapter = AuxBarKeyAdapter(
                 vertical = isVertical,
+                fixedVisibleItemCount = auxBarConfig.scrollableVisibleKeyCount,
                 keyViewFactory = { def ->
                     createKeyView(def, registerComposeAware = false).also { view ->
                         applyConfiguredFonts(view)
@@ -3003,6 +3004,7 @@ class AuxBarAdapter(
  */
 class AuxBarKeyAdapter(
     private val vertical: Boolean,
+    private val fixedVisibleItemCount: Int? = null,
     private val keyViewFactory: (KeyDef) -> KeyView
 ) : RecyclerView.Adapter<AuxBarKeyAdapter.ViewHolder>() {
 
@@ -3011,6 +3013,7 @@ class AuxBarKeyAdapter(
     private var minItemHeightPx: Int = -1
     private var attachedRecyclerView: RecyclerView? = null
     private var lastHorizontalWidth: Int = -1
+    private var lastVerticalHeight: Int = -1
     private val horizontalLayoutChangeListener =
         View.OnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
             if (vertical) return@OnLayoutChangeListener
@@ -3021,6 +3024,24 @@ class AuxBarKeyAdapter(
                 notifyDataSetChanged()
             }
         }
+    private val verticalLayoutChangeListener =
+        View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (!vertical) return@OnLayoutChangeListener
+            val height = bottom - top
+            val oldHeight = oldBottom - oldTop
+            if (height > 0 && (height != oldHeight || height != lastVerticalHeight)) {
+                updateFixedVerticalItemHeight(height)
+            }
+        }
+
+    private fun updateFixedVerticalItemHeight(viewportHeight: Int) {
+        val count = fixedVisibleItemCount?.takeIf { it > 0 } ?: return
+        val exactHeight = viewportHeight / count
+        if (exactHeight > 0) {
+            lastVerticalHeight = viewportHeight
+            setMinItemHeight(exactHeight)
+        }
+    }
 
     fun setMinItemHeight(px: Int) {
         if (px > 0 && px != minItemHeightPx) {
@@ -3049,11 +3070,9 @@ class AuxBarKeyAdapter(
         val view = FrameLayout(ctx).apply {
             layoutParams = RecyclerView.LayoutParams(
                 if (!vertical) ViewGroup.LayoutParams.WRAP_CONTENT else ViewGroup.LayoutParams.MATCH_PARENT,
-                if (!vertical) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
+                if (!vertical) ViewGroup.LayoutParams.MATCH_PARENT else
+                    if (minItemHeightPx > 0) minItemHeightPx else ctx.dp(52)
             )
-            if (vertical) {
-                minimumHeight = if (minItemHeightPx > 0) minItemHeightPx else ctx.dp(52)
-            }
         }
         return ViewHolder(view)
     }
@@ -3075,6 +3094,15 @@ class AuxBarKeyAdapter(
                 lp.rightMargin = 0
                 holder.itemView.layoutParams = lp
             }
+        } else {
+            val exactHeight = if (minItemHeightPx > 0) minItemHeightPx else holder.itemView.context.dp(52)
+            val lp = holder.itemView.layoutParams as? RecyclerView.LayoutParams
+                ?: RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, exactHeight)
+            if (lp.height != exactHeight || lp.width != ViewGroup.LayoutParams.MATCH_PARENT) {
+                lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+                lp.height = exactHeight
+                holder.itemView.layoutParams = lp
+            }
         }
         holder.bind(key, signature)
     }
@@ -3085,6 +3113,9 @@ class AuxBarKeyAdapter(
         if (!vertical) {
             recyclerView.addOnLayoutChangeListener(horizontalLayoutChangeListener)
             lastHorizontalWidth = recyclerView.width
+        } else if (fixedVisibleItemCount != null) {
+            recyclerView.addOnLayoutChangeListener(verticalLayoutChangeListener)
+            recyclerView.post { updateFixedVerticalItemHeight(recyclerView.height) }
         }
     }
 
@@ -3092,6 +3123,9 @@ class AuxBarKeyAdapter(
         if (!vertical) {
             recyclerView.removeOnLayoutChangeListener(horizontalLayoutChangeListener)
             lastHorizontalWidth = -1
+        } else if (fixedVisibleItemCount != null) {
+            recyclerView.removeOnLayoutChangeListener(verticalLayoutChangeListener)
+            lastVerticalHeight = -1
         }
         if (attachedRecyclerView === recyclerView) {
             attachedRecyclerView = null

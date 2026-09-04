@@ -42,6 +42,35 @@ interface ClipboardDao {
     )
     fun searchEntries(query: String): PagingSource<Int, ClipboardEntry>
 
+    @Query(
+        "SELECT * FROM ${ClipboardEntry.TABLE_NAME} " +
+                "WHERE pinned=1 AND deleted=0 AND text LIKE :query ESCAPE '\\' " +
+                "ORDER BY timestamp DESC"
+    )
+    fun searchFavoriteEntries(query: String): PagingSource<Int, ClipboardEntry>
+
+    @Query(
+        "SELECT * FROM ${ClipboardEntry.TABLE_NAME} " +
+                "WHERE source=:source AND text NOT LIKE 'content://%' AND text NOT LIKE 'file://%' " +
+                "AND pinned=0 AND deleted=0 AND text LIKE :query ESCAPE '\\' " +
+                "ORDER BY timestamp DESC"
+    )
+    fun searchTextEntriesBySource(source: String, query: String): PagingSource<Int, ClipboardEntry>
+
+    @Query(
+        "SELECT * FROM ${ClipboardEntry.TABLE_NAME} " +
+                "WHERE source=:source AND deleted=0 AND text LIKE :query ESCAPE '\\' " +
+                "ORDER BY pinned DESC, timestamp DESC"
+    )
+    fun searchEntriesBySource(source: String, query: String): PagingSource<Int, ClipboardEntry>
+
+    @Query(
+        "SELECT * FROM ${ClipboardEntry.TABLE_NAME} " +
+                "WHERE (text LIKE 'content://%' OR text LIKE 'file://%') AND deleted=0 " +
+                "AND text LIKE :query ESCAPE '\\' ORDER BY pinned DESC, timestamp DESC"
+    )
+    fun searchMediaEntries(query: String): PagingSource<Int, ClipboardEntry>
+
     @Query("SELECT * FROM ${ClipboardEntry.TABLE_NAME} WHERE pinned=1 AND deleted=0 ORDER BY timestamp DESC")
     fun favoriteEntries(): PagingSource<Int, ClipboardEntry>
 

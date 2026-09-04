@@ -1498,6 +1498,7 @@ class InputView(
         (auxBarContainer.layoutParams as android.widget.FrameLayout.LayoutParams).gravity = Gravity.BOTTOM
     }
     private val commonKeyActionListener = CommonKeyActionListener()
+    private var resourcesDisposed = false
     private val windowManager = InputWindowManager()
     private val kawaiiBar = KawaiiBarComponent()
     private val horizontalCandidate = HorizontalCandidateComponent()
@@ -3473,7 +3474,19 @@ class InputView(
         ConfigProviders.addIconChangeListener(onIconChangeListener)
     }
 
-    override fun onDetachedFromWindow() {
+    internal fun cancelOngoingKeyActions() {
+        commonKeyActionListener.cancelOngoingActions()
+    }
+
+    /** Release listeners even when a prewarmed view was never attached to a window. */
+    internal fun disposePrepared() {
+        if (!isAttachedToWindow) disposeResources()
+    }
+
+    private fun disposeResources() {
+        if (resourcesDisposed) return
+        resourcesDisposed = true
+        commonKeyActionListener.cancelOngoingActions()
         windowManager.onWindowChanged = null
         advancedPrefs.unregisterOnChangeListener(onKeyboardSizeChangeListener)
         keyboardPrefs.unregisterOnChangeListener(onKeyboardSizeChangeListener)
@@ -3484,6 +3497,10 @@ class InputView(
         blurUpdateScope.cancel()
         // clear DynamicScope, implies that InputView should not be attached again after detached.
         scope.clear()
+    }
+
+    override fun onDetachedFromWindow() {
+        disposeResources()
         super.onDetachedFromWindow()
     }
 
