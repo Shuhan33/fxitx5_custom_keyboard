@@ -12,5 +12,7 @@ data class AuxBarConfig(
     /** Keep layout-provided keys visible even when the engine publishes tab actions. */
     val alwaysShowCustomKeys: Boolean = false,
     /** Number of custom keys shown before scrolling; null keeps normal key sizing. */
-    val scrollableVisibleKeyCount: Int? = null
+    val scrollableVisibleKeyCount: Int? = null,
+    /** Render the vertical custom-key list as one continuous colored rail. */
+    val continuousCustomKeyRail: Boolean = false
 )

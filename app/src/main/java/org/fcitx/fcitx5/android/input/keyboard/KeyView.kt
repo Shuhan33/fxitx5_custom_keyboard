@@ -162,6 +162,14 @@ abstract class KeyView(
         add(appearanceView, lParams(matchParent, matchParent))
     }
 
+    /**
+     * Keep this key's interaction and pressed feedback, but let a containing
+     * scrollable rail provide the persistent background for the whole group.
+     */
+    fun useContinuousRailAppearance() {
+        appearanceView.background = null
+    }
+
     private fun resolveMonetColor(resourceName: String?): Int? {
         val name = resourceName?.takeIf { it.isNotBlank() } ?: return null
         val colorResId = context.resources.getIdentifier(name, "color", "android")

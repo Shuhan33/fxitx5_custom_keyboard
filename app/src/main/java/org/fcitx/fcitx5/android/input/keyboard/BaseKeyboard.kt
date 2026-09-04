@@ -6,6 +6,8 @@ package org.fcitx.fcitx5.android.input.keyboard
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Rect
 import android.os.SystemClock
 import android.util.Log
@@ -392,6 +394,22 @@ abstract class BaseKeyboard(
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
             }
+            if (auxBarConfig.continuousCustomKeyRail && isVertical) {
+                val radius = dp(ThemeManager.prefs.keyRadius.getValue().toFloat())
+                scrollableRv.background = insetRadiusDrawable(
+                    hMargin,
+                    vMargin,
+                    radius,
+                    theme.altKeyBackgroundColor
+                )
+                scrollableRv.addItemDecoration(
+                    AuxBarRailDividerDecoration(
+                        color = theme.dividerColor,
+                        horizontalInset = hMargin + dp(10),
+                        thickness = dp(1).coerceAtLeast(1)
+                    )
+                )
+            }
             // Use the dominant text size in the current layout instead of the first
             // textual key, which may be a small special key.
             val keyTextSize = rows.asSequence()
@@ -408,7 +426,12 @@ abstract class BaseKeyboard(
             val keyAdapter = AuxBarKeyAdapter(
                 vertical = isVertical,
                 keyViewFactory = { def ->
-                    createKeyView(def, registerComposeAware = false).also(::applyConfiguredFonts)
+                    createKeyView(def, registerComposeAware = false).also { view ->
+                        applyConfiguredFonts(view)
+                        if (auxBarConfig.continuousCustomKeyRail) {
+                            view.useContinuousRailAppearance()
+                        }
+                    }
                 }
             )
             val pinnedKeyAdapter = AuxBarKeyAdapter(
@@ -440,7 +463,7 @@ abstract class BaseKeyboard(
                 auxBarInnerLayout.add(pinnedRv, lParams(height = wrapContent) {
                     bottomOfParent()
                     centerHorizontally()
-                    topMargin = vMargin
+                    topMargin = if (auxBarConfig.continuousCustomKeyRail) 0 else vMargin
                 })
             } else {
                 auxBarInnerLayout.add(scrollableRv, lParams {
@@ -2817,6 +2840,33 @@ abstract class BaseKeyboard(
         releaseAllTouchTargets()
     }
 
+}
+
+private class AuxBarRailDividerDecoration(
+    color: Int,
+    private val horizontalInset: Int,
+    thickness: Int
+) : RecyclerView.ItemDecoration() {
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        strokeWidth = thickness.toFloat()
+    }
+
+    override fun onDrawOver(canvas: Canvas, parent: RecyclerView, state: RecyclerView.State) {
+        val adapter = parent.adapter ?: return
+        val left = (parent.paddingLeft + horizontalInset).toFloat()
+        val right = (parent.width - parent.paddingRight - horizontalInset).toFloat()
+        if (right <= left) return
+
+        for (index in 0 until parent.childCount) {
+            val child = parent.getChildAt(index)
+            val position = parent.getChildAdapterPosition(child)
+            if (position == RecyclerView.NO_POSITION || position >= adapter.itemCount - 1) continue
+            val y = child.bottom + child.translationY
+            canvas.drawLine(left, y, right, y, paint)
+        }
+    }
 }
 
 class AuxBarAdapter(

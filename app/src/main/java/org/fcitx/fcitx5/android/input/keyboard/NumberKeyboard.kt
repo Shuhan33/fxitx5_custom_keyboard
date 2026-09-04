@@ -36,7 +36,8 @@ class NumberKeyboard(
             position = AuxBarPosition.Left,
             sizePercent = 17f,
             alwaysShowCustomKeys = true,
-            scrollableVisibleKeyCount = 4
+            scrollableVisibleKeyCount = 4,
+            continuousCustomKeyRail = true
         )
 
         val ScrollableSymbols: List<KeyDef> = listOf(
