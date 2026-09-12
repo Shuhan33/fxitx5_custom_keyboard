@@ -17,8 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
-import org.fcitx.fcitx5.android.data.prefs.AppPrefs
-import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
@@ -36,7 +34,6 @@ class TokenizedClipboardWindow(
     private val windowManager: InputWindowManager by manager.must()
     private var tokens = emptyList<ClipboardToken>()
     private var tokenizeJob: Job? = null
-    private val returnAfterCopyOrPaste by AppPrefs.getInstance().clipboard.clipboardReturnAfterPaste
     private val adapter by lazy {
         TokenizedClipboardAdapter(theme) { selectedCount, totalCount ->
             ui.updateSelectionState(selectedCount, totalCount)
@@ -77,7 +74,7 @@ class TokenizedClipboardWindow(
             }
             context.clipboardManager.setPrimaryClip(ClipData.newPlainText("TokenizedClipboard", joined))
             Toast.makeText(context, R.string.tokenized_clipboard_copied, Toast.LENGTH_SHORT).show()
-            if (returnAfterCopyOrPaste) windowManager.attachWindow(KeyboardWindow)
+            service.inputView?.returnToMainKeyboard()
         }
         selectAllButton.setOnClickListener {
             adapter.toggleSelectAll()
@@ -96,7 +93,7 @@ class TokenizedClipboardWindow(
             }
             service.commitClipboardEntry(joined)
             adapter.clearSelection()
-            if (returnAfterCopyOrPaste) windowManager.attachWindow(KeyboardWindow)
+            service.inputView?.returnToMainKeyboard()
         }
     }.root
 

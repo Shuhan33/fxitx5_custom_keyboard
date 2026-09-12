@@ -539,9 +539,6 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "s",
             step = 5
         ) { clipboardListening.getValue() && clipboardSuggestion.getValue() }
-        val clipboardReturnAfterPaste = switch(
-            R.string.clipboard_return_after_copy_or_paste, "clipboard_return_after_copy_or_paste", true
-        )
         val clipboardMaskSensitive = switch(
             R.string.clipboard_mask_sensitive, "clipboard_mask_sensitive", true
         ) { clipboardListening.getValue() }

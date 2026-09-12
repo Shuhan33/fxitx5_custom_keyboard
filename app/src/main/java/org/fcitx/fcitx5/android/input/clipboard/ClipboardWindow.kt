@@ -52,7 +52,6 @@ import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.Transition
 import org.fcitx.fcitx5.android.input.clipboard.ClipboardStateMachine.TransitionEvent.ClipboardListeningUpdated
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
-import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindow
 import org.fcitx.fcitx5.android.input.wm.InputWindowManager
 import org.fcitx.fcitx5.android.utils.AppUtil
@@ -97,7 +96,6 @@ class ClipboardWindow(
     }
 
     private val clipboardEnabledPref = prefs.clipboardListening
-    private val clipboardReturnAfterPaste by prefs.clipboardReturnAfterPaste
     private val clipboardMaskSensitive by prefs.clipboardMaskSensitive
 
     private val clipboardEntryRadius by ThemeManager.prefs.clipboardEntryRadius
@@ -251,13 +249,13 @@ class ClipboardWindow(
                 service.lifecycleScope.launch {
                     ClipboardManager.markUsed(entry.id)
                 }
-                if (clipboardReturnAfterPaste) windowManager.attachWindow(KeyboardWindow)
+                service.inputView?.returnToMainKeyboard()
             }
 
             override fun onCopy(entry: ClipboardEntry) {
                 context.clipboardManager.setPrimaryClip(ClipData.newPlainText("Clipboard", entry.text))
                 Toast.makeText(context, R.string.tokenized_clipboard_copied, Toast.LENGTH_SHORT).show()
-                if (clipboardReturnAfterPaste) windowManager.attachWindow(KeyboardWindow)
+                service.inputView?.returnToMainKeyboard()
             }
         }
     }
