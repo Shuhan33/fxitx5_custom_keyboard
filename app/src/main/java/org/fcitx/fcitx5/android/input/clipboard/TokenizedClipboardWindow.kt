@@ -12,9 +12,13 @@ import com.google.android.flexbox.FlexWrap
 import com.google.android.flexbox.FlexboxLayoutManager
 import com.google.android.flexbox.JustifyContent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.theme.Theme
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
+import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
@@ -31,6 +35,8 @@ class TokenizedClipboardWindow(
     private val theme: Theme by manager.theme()
     private val windowManager: InputWindowManager by manager.must()
     private var tokens = emptyList<ClipboardToken>()
+    private var tokenizeJob: Job? = null
+    private val returnAfterCopyOrPaste by AppPrefs.getInstance().clipboard.clipboardReturnAfterPaste
     private val adapter by lazy {
         TokenizedClipboardAdapter(theme) { selectedCount, totalCount ->
             ui.updateSelectionState(selectedCount, totalCount)
@@ -71,6 +77,7 @@ class TokenizedClipboardWindow(
             }
             context.clipboardManager.setPrimaryClip(ClipData.newPlainText("TokenizedClipboard", joined))
             Toast.makeText(context, R.string.tokenized_clipboard_copied, Toast.LENGTH_SHORT).show()
+            if (returnAfterCopyOrPaste) windowManager.attachWindow(KeyboardWindow)
         }
         selectAllButton.setOnClickListener {
             adapter.toggleSelectAll()
@@ -89,21 +96,26 @@ class TokenizedClipboardWindow(
             }
             service.commitClipboardEntry(joined)
             adapter.clearSelection()
+            if (returnAfterCopyOrPaste) windowManager.attachWindow(KeyboardWindow)
         }
     }.root
 
     override fun onAttached() {
         ui.setEmptyState(true, isLoading = true)
-        service.lifecycleScope.launch(Dispatchers.Default) {
-            tokens = ClipboardTextTokenizer.tokenize(sourceText)
-            service.lifecycleScope.launch(Dispatchers.Main) {
-                adapter.submitTokens(tokens)
-                ui.setEmptyState(tokens.isEmpty(), isLoading = false)
+        tokenizeJob?.cancel()
+        tokenizeJob = service.lifecycleScope.launch {
+            tokens = withContext(Dispatchers.Default) {
+                ClipboardTextTokenizer.tokenize(sourceText)
             }
+            adapter.submitTokens(tokens)
+            ui.setEmptyState(tokens.isEmpty(), isLoading = false)
         }
     }
 
-    override fun onDetached() = Unit
+    override fun onDetached() {
+        tokenizeJob?.cancel()
+        tokenizeJob = null
+    }
 
     private fun currentSelectionText(): String =
         ClipboardTextTokenizer.joinSelection(sourceText, adapter.selectedTokens())

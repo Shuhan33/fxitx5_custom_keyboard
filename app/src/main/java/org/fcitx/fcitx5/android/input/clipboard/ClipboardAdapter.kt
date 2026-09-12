@@ -196,6 +196,9 @@ abstract class ClipboardAdapter(
         val imageUri = entry.viewableImageUri()
 
         if (!isUriEntry) {
+            menu.item(R.string.copy, R.drawable.ic_baseline_content_copy_24, iconTint) {
+                onCopy(entry)
+            }
             menu.item(android.R.string.paste, R.drawable.ic_baseline_content_paste_24, iconTint) {
                 onPaste(entry)
             }
@@ -282,6 +285,8 @@ abstract class ClipboardAdapter(
     }
 
     abstract fun onPaste(entry: ClipboardEntry)
+
+    abstract fun onCopy(entry: ClipboardEntry)
 
     abstract fun onPin(id: Int)
 

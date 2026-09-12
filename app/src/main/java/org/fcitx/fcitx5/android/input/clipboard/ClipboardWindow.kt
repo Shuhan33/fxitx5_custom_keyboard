@@ -59,6 +59,7 @@ import org.fcitx.fcitx5.android.utils.AppUtil
 import org.fcitx.fcitx5.android.utils.ClipboardSourceDeletionTarget
 import org.fcitx.fcitx5.android.utils.EventStateMachine
 import org.fcitx.fcitx5.android.utils.item
+import org.fcitx.fcitx5.android.utils.clipboardManager
 import org.fcitx.fcitx5.android.utils.styledColorOrDefault
 import org.mechdancer.dependency.manager.must
 import splitties.dimensions.dp
@@ -250,6 +251,12 @@ class ClipboardWindow(
                 service.lifecycleScope.launch {
                     ClipboardManager.markUsed(entry.id)
                 }
+                if (clipboardReturnAfterPaste) windowManager.attachWindow(KeyboardWindow)
+            }
+
+            override fun onCopy(entry: ClipboardEntry) {
+                context.clipboardManager.setPrimaryClip(ClipData.newPlainText("Clipboard", entry.text))
+                Toast.makeText(context, R.string.tokenized_clipboard_copied, Toast.LENGTH_SHORT).show()
                 if (clipboardReturnAfterPaste) windowManager.attachWindow(KeyboardWindow)
             }
         }

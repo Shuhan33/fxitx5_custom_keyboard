@@ -52,7 +52,7 @@ class TokenizedClipboardUi(
     val selectAllButton = createActionButton(R.string.tokenized_clipboard_select_all)
     val invertSelectionButton = createActionButton(R.string.tokenized_clipboard_invert_selection)
     val clearSelectionButton = createActionButton(R.string.tokenized_clipboard_clear_selection)
-    val sendButton = createActionButton(R.string.tokenized_clipboard_send)
+    val sendButton = createActionButton(android.R.string.paste)
 
     val recyclerView = recyclerView {
         overScrollMode = View.OVER_SCROLL_NEVER
