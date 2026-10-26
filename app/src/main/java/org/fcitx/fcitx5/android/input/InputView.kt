@@ -134,6 +134,11 @@ class InputView(
         horizontalCandidate.showEmailSuggestions(suggestions)
     }
 
+    /** Build the main and numeric keyboard view hierarchies during idle prewarm. */
+    internal fun prewarmKeyboardViews() {
+        keyboardWindow.prewarmKeyboards()
+    }
+
     private val keyBorder by ThemeManager.prefs.keyBorder
 
     private val customBackground = imageView {

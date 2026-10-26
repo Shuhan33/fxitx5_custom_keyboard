@@ -915,6 +915,12 @@
     <string name="slei_backup_directory_summary">可选：选择 SD 卡或文档目录用于快速导出</string>
     <string name="slei_performance_category">性能</string>
     <string name="slei_performance_diagnostics">输入法弹出诊断</string>
+    <string name="slei_performance_copy">复制性能诊断文本</string>
+    <string name="slei_performance_copy_summary">包含版本、设备与最近弹出样本，方便提交排查</string>
+    <string name="slei_performance_copied">性能诊断已复制到剪贴板</string>
+    <string name="slei_crash_last">查看最近崩溃记录</string>
+    <string name="slei_crash_last_summary">保留本地最近 10 份崩溃堆栈，便于事后排查</string>
+    <string name="slei_crash_none">暂无本地崩溃记录</string>
     <string name="slei_weekly_report">输入周报</string>
     <string name="slei_weekly_report_summary">查看本周、上周和上上周的每日字数与高频词</string>
     <string name="slei_weekly_report_title">输入周报</string>

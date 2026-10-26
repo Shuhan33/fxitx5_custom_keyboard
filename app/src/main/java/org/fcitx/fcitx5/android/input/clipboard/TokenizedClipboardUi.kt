@@ -69,11 +69,11 @@ class TokenizedClipboardUi(
 
     private val actionBar = horizontalLayout {
         gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        add(copyButton, lParams(wrapContent, dp(28)))
-        add(selectAllButton, lParams(wrapContent, dp(28)))
-        add(invertSelectionButton, lParams(wrapContent, dp(28)))
-        add(clearSelectionButton, lParams(wrapContent, dp(28)))
-        add(sendButton, lParams(wrapContent, dp(28)))
+        add(copyButton, lParams(wrapContent, dp(40)))
+        add(selectAllButton, lParams(wrapContent, dp(40)))
+        add(invertSelectionButton, lParams(wrapContent, dp(40)))
+        add(clearSelectionButton, lParams(wrapContent, dp(40)))
+        add(sendButton, lParams(wrapContent, dp(40)))
     }
 
     private val topBar = constraintLayout {
@@ -151,9 +151,9 @@ class TokenizedClipboardUi(
     private fun createActionButton(textRes: Int) = textView {
         text = ctx.getString(textRes)
         gravity = gravityCenter
-        minWidth = dp(40)
+        minWidth = dp(48)
         textSize = 13f
-        setPaddingDp(6, 0, 6, 0)
+        setPaddingDp(10, 0, 10, 0)
         background = pressHighlightDrawable(theme.keyPressHighlightColor)
         setTextColor(theme.altKeyTextColor)
     }

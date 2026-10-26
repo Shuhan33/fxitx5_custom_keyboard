@@ -4,7 +4,9 @@
  */
 package fcitx5.slei.ui
 
+import android.content.ClipData
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
@@ -22,13 +24,17 @@ import androidx.preference.SwitchPreferenceCompat
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import fcitx5.slei.stats.InputStatsManager
 import fcitx5.slei.suggestions.EmailSuggestionManager
+import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.R
+import org.fcitx.fcitx5.android.FcitxApplication
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
+import org.fcitx.fcitx5.android.ui.main.LogActivity
 import org.fcitx.fcitx5.android.ui.main.settings.SettingsRoute
 import org.fcitx.fcitx5.android.utils.addCategory
 import org.fcitx.fcitx5.android.utils.addPreference
 import org.fcitx.fcitx5.android.utils.navigateWithAnim
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -137,6 +143,14 @@ class SleiDataFragment : PaddingPreferenceFragment() {
                     getString(R.string.slei_performance_diagnostics),
                     SleiPerformanceMetrics.summary()
                 )
+                addPreference(
+                    R.string.slei_performance_copy,
+                    R.string.slei_performance_copy_summary
+                ) { copyPerformanceReport() }
+                addPreference(
+                    R.string.slei_crash_last,
+                    R.string.slei_crash_last_summary
+                ) { openLastCrashReport() }
             }
         }
         refreshDirectorySummary()
@@ -282,6 +296,39 @@ class SleiDataFragment : PaddingPreferenceFragment() {
 
     private fun selectedTreeUri(): Uri? = prefs.getString(BACKUP_TREE_KEY, null)?.let(Uri::parse)
 
+    private fun copyPerformanceReport() {
+        val report = SleiPerformanceMetrics.report()
+        // Do not let the IME pick this diagnostics copy up as the next clipboard suggestion.
+        AppPrefs.getInstance().internal.suppressNextClipboardSuggestion.setValue(true)
+        val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(getString(R.string.slei_performance_diagnostics), report)
+        )
+        Toast.makeText(requireContext(), R.string.slei_performance_copied, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun openLastCrashReport() {
+        val latest = latestCrashReportText()
+            ?: run {
+                Toast.makeText(requireContext(), R.string.slei_crash_none, Toast.LENGTH_SHORT).show()
+                return
+            }
+        val intent = Intent(requireContext(), LogActivity::class.java).apply {
+            putExtra(LogActivity.FROM_CRASH, true)
+            putExtra(LogActivity.CRASH_STACK_TRACE, latest)
+        }
+        startActivity(intent)
+    }
+
+    private fun latestCrashReportText(): String? {
+        val dir = File(requireContext().filesDir, FcitxApplication.CRASH_REPORT_DIR)
+        val file = dir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("crash-") }
+            ?.maxByOrNull { it.name }
+            ?: return null
+        return runCatching { file.readText().take(MAX_CRASH_REPORT_TEXT) }.getOrNull()
+    }
+
     private fun refreshDirectorySummary() {
         directoryPreference?.summary = selectedTreeUri()?.toString()
             ?: getString(R.string.slei_backup_directory_summary)
@@ -296,5 +343,6 @@ class SleiDataFragment : PaddingPreferenceFragment() {
 
     companion object {
         private const val BACKUP_TREE_KEY = "slei_backup_tree_uri"
+        private const val MAX_CRASH_REPORT_TEXT = 20000
     }
 }

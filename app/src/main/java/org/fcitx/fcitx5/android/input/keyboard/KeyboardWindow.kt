@@ -118,6 +118,16 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
 
     internal val currentKeyboard: BaseKeyboard? get() = keyboards[currentKeyboardName]
 
+    /**
+     * Build the two most-used keyboards ahead of first attach so the layout JSON
+     * parsing and the whole key view hierarchy are not constructed on the popup
+     * critical path. Pure construction, no layout switch is triggered.
+     */
+    internal fun prewarmKeyboards() {
+        getOrCreateKeyboard(TextKeyboard.Name)
+        getOrCreateKeyboard(NumberKeyboard.Name)
+    }
+
     private fun clearCompanionKeyboardHeightOverride() {
         companionHeightPercentOverride = null
         companionHeightPxOverride = null

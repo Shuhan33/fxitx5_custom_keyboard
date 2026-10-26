@@ -9,7 +9,9 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.EditText
 import android.text.InputType
@@ -17,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.ViewAnimator
 import androidx.transition.Fade
 import androidx.transition.TransitionManager
+import androidx.core.view.isVisible
 import androidx.core.widget.doOnTextChanged
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.data.clipboard.ClipboardCategory
@@ -25,12 +28,15 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.bar.ui.ToolButton
 import splitties.dimensions.dp
+import splitties.resources.drawable
 import splitties.views.backgroundColor
 import splitties.views.dsl.coordinatorlayout.coordinatorLayout
 import splitties.views.dsl.coordinatorlayout.defaultLParams
 import splitties.views.dsl.core.Ui
 import splitties.views.dsl.core.add
+import splitties.views.dsl.core.frameLayout
 import splitties.views.dsl.core.horizontalLayout
+import splitties.views.dsl.core.imageView
 import splitties.views.dsl.core.lParams
 import splitties.views.dsl.core.matchParent
 import splitties.views.dsl.core.textView
@@ -38,6 +44,7 @@ import splitties.views.dsl.core.view
 import splitties.views.dsl.core.verticalLayout
 import splitties.views.dsl.core.wrapContent
 import splitties.views.dsl.recyclerview.recyclerView
+import splitties.views.imageDrawable
 import splitties.views.gravityCenter
 import splitties.views.setPaddingDp
 import timber.log.Timber
@@ -89,11 +96,32 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         inputType = InputType.TYPE_CLASS_TEXT
         setTextColor(theme.keyTextColor)
         setHintTextColor(theme.popupTextColor)
-        setPaddingDp(14, 0, 14, 0)
+        setPaddingDp(14, 0, 46, 0)
         background = GradientDrawable().apply {
             cornerRadius = ctx.dp(14).toFloat()
             setColor(theme.keyBackgroundColor)
         }
+    }
+
+    private val searchClearButton = imageView {
+        imageDrawable = drawable(R.drawable.ic_baseline_close_24)?.apply {
+            setTint(theme.popupTextColor)
+        }
+        contentDescription = ctx.getString(R.string.clear)
+        visibility = View.GONE
+        isClickable = true
+        isFocusable = true
+        setPaddingDp(10, 10, 10, 10)
+    }
+
+    val searchFieldContainer = frameLayout {
+        add(searchField, FrameLayout.LayoutParams(matchParent, matchParent))
+        add(
+            searchClearButton,
+            FrameLayout.LayoutParams(dp(36), dp(36)).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            }
+        )
     }
 
     private val keyBorder by ThemeManager.prefs.keyBorder
@@ -105,7 +133,7 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         }
         add(verticalLayout {
             add(
-                searchField,
+                searchFieldContainer,
                 LinearLayout.LayoutParams(matchParent, dp(36)).apply {
                     leftMargin = dp(10)
                     rightMargin = dp(10)
@@ -164,7 +192,17 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
     }
 
     fun setOnSearchQueryChangedListener(listener: (String) -> Unit) {
-        searchField.doOnTextChanged { text, _, _, _ -> listener(text?.toString().orEmpty()) }
+        searchField.doOnTextChanged { text, _, _, _ ->
+            searchClearButton.isVisible = !text.isNullOrEmpty()
+            listener(text?.toString().orEmpty())
+        }
+        // cover the case where a previous query persisted across window reopens
+        searchClearButton.isVisible = !searchField.text.isNullOrEmpty()
+        searchClearButton.setOnClickListener {
+            if (searchField.text.isNullOrEmpty()) return@setOnClickListener
+            searchField.setText("")
+            searchField.requestFocus()
+        }
     }
 
     fun setSelectedCategory(category: ClipboardCategory) {

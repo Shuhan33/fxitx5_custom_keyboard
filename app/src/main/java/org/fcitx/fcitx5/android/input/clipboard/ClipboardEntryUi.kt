@@ -65,7 +65,9 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
         maxLines = 4
         textSize = 14f
         includeFontPadding = false
-        setPaddingDp(8, 4, 8, 4)
+        // trailing padding reserves room for the bottom-right pin so text
+        // never runs underneath the (enlarged) touch target
+        setPaddingDp(8, 4, 42, 4)
         ellipsize = TextUtils.TruncateAt.END
         setTextColor(theme.keyTextColor)
     }
@@ -77,7 +79,9 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
         contentDescription = ctx.getString(R.string.add_to_favorites)
         isClickable = true
         isFocusable = true
-        setPaddingDp(6, 6, 6, 6)
+        // 36dp container with 8dp padding keeps a legible glyph while giving a
+        // comfortable touch target; text reserves matching trailing space
+        setPaddingDp(8, 8, 8, 8)
         background = RippleDrawable(
             ColorStateList.valueOf(theme.keyPressHighlightColor),
             null,
@@ -95,7 +99,7 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
         add(textView, lParams(matchParent, wrapContent) {
             centerVertically()
         })
-        add(pin, lParams(dp(28), dp(28)) {
+        add(pin, lParams(dp(36), dp(36)) {
             bottomOfParent(dp(2))
             endOfParent(dp(2))
         })
@@ -137,7 +141,7 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
                 // Image with text
                 textView.visibility = View.VISIBLE
                 textView.maxLines = 2
-                textView.setPaddingDp(8, 82, 8, 6)
+                textView.setPaddingDp(8, 82, 42, 6)
                 root.minimumHeight = ctx.dp(122)
             }
         } else {
@@ -151,7 +155,7 @@ class ClipboardEntryUi(override val ctx: Context, private val theme: Theme, radi
                 imagePlaceholder.visibility = View.GONE
                 textView.visibility = View.VISIBLE
                 textView.maxLines = 4
-                textView.setPaddingDp(8, 4, 8, 4)
+                textView.setPaddingDp(8, 4, 42, 4)
                 root.minimumHeight = ctx.dp(30)
             }
         }

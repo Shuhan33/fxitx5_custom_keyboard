@@ -148,6 +148,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
     private val clipboardItemTimeout = prefs.clipboard.clipboardItemTimeout
     private val clipboardMaskSensitive by prefs.clipboard.clipboardMaskSensitive
     private var consumedClipboardSuggestion by prefs.internal.consumedClipboardSuggestion
+    private var suppressNextClipboardSuggestion by prefs.internal.suppressNextClipboardSuggestion
     private var clipboardImpressionSignature by
         prefs.internal.clipboardSuggestionImpressionSignature
     private var clipboardImpressionCount by prefs.internal.clipboardSuggestionImpressionCount
@@ -193,6 +194,20 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         return false
     }
 
+    /**
+     * One-shot suppression for copies made inside the app itself (e.g. the
+     * performance report) so they never show up as the next clipboard suggestion.
+     */
+    private fun consumeInternalClipboardSuppression(): Boolean {
+        if (!suppressNextClipboardSuggestion) return false
+        suppressNextClipboardSuggestion = false
+        clipboardTimeoutJob?.cancel()
+        clipboardTimeoutJob = null
+        isClipboardFresh = false
+        evalIdleUiState()
+        return true
+    }
+
     private fun recordClipboardSuggestionImpression(entry: ClipboardEntry) {
         if (inputSessionId <= 0L) return
         val signature = entry.suggestionSignature()
@@ -222,6 +237,7 @@ class KawaiiBarComponent : UniqueViewComponent<KawaiiBarComponent, FrameLayout>(
         ClipboardManager.OnClipboardUpdateListener {
             if (!clipboardSuggestion.getValue()) return@OnClipboardUpdateListener
             service.lifecycleScope.launch {
+                if (consumeInternalClipboardSuppression()) return@launch
                 if (it.text.isEmpty() || it.isSuggestionExpired() || it.isSuggestionSuppressed()) {
                     clipboardTimeoutJob?.cancel()
                     clipboardTimeoutJob = null

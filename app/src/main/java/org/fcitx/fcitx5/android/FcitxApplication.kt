@@ -20,6 +20,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.os.LocaleListCompat
 import androidx.preference.PreferenceManager
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.MainScope
@@ -158,6 +161,9 @@ class FcitxApplication : Application() {
                     // continuous crashes within 10 seconds, maybe in a crash loop. just bail
                     exitProcess(10)
                 }
+                // Persist the stack trace to internal storage so it survives after the
+                // crash dialog is dismissed and can be reviewed in the data settings page.
+                persistCrashReport(ctx, crashTime, e)
                 startActivity<LogActivity> {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     putExtra(LogActivity.FROM_CRASH, true)
@@ -266,6 +272,47 @@ class FcitxApplication : Application() {
         FontProviders.trimMemory()
     }
 
+    /**
+     * Write a self-contained crash report into internal storage and keep only the
+     * newest [MAX_CRASH_REPORTS] files. Never throws: crash handling must not fail.
+     */
+    private fun persistCrashReport(context: Context, crashTime: Long, e: Throwable) {
+        runCatching {
+            val dir = File(context.filesDir, CRASH_REPORT_DIR)
+            if (!dir.exists() && !dir.mkdirs()) return
+            val stack = e.stackTraceToString().let {
+                if (it.length > MAX_STACKTRACE_SIZE)
+                    it.take(MAX_STACKTRACE_SIZE) + "<truncated>"
+                else
+                    it
+            }
+            val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
+            val file = File(
+                dir,
+                "crash-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date(crashTime)) + ".txt"
+            )
+            file.writeText(
+                buildString {
+                    append("time: ").append(formatter.format(Date(crashTime))).append('\n')
+                    append("version: ").append(BuildConfig.VERSION_NAME)
+                        .append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
+                    append("device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                        .append(", Android ").append(Build.VERSION.RELEASE)
+                        .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
+                    append("thread: ").append(Thread.currentThread().name).append("\n\n")
+                    append(stack)
+                    if (!stack.endsWith("\n")) append('\n')
+                }
+            )
+            val files = dir.listFiles()?.sortedBy { it.name } ?: return
+            val staleCount = files.size - MAX_CRASH_REPORTS
+            if (staleCount > 0) {
+                // names are timestamp-ordered ascending, so the oldest files come first
+                files.take(staleCount).forEach { it.delete() }
+            }
+        }
+    }
+
     companion object {
         private var lastPid: Int? = null
         private var instance: FcitxApplication? = null
@@ -274,6 +321,8 @@ class FcitxApplication : Application() {
 
         fun getLastPid() = lastPid
         private const val MAX_STACKTRACE_SIZE = 128000
+        private const val MAX_CRASH_REPORTS = 10
+        const val CRASH_REPORT_DIR = "crash_reports"
 
         const val ACTION_RESTART_FCITX_INSTANCE =
             "${BuildConfig.APPLICATION_ID}.action.RESTART_FCITX_INSTANCE"

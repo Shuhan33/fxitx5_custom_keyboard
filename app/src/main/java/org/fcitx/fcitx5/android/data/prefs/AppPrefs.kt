@@ -78,6 +78,10 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             string("clipboard_suggestion_impression_signature", "")
         val clipboardSuggestionImpressionCount =
             int("clipboard_suggestion_impression_count", 0)
+        // plain-text snapshot of the last performance summary (previous process)
+        val lastPerformanceSummary = string("last_performance_summary", "")
+        // set by in-app diagnostics copies so the clipboard suggestion skips them
+        val suppressNextClipboardSuggestion = bool("suppress_next_clipboard_suggestion", false)
     }
 
     inner class Advanced : ManagedPreferenceCategory(R.string.advanced, sharedPreferences) {

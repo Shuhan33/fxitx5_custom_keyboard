@@ -338,15 +338,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     private fun replaceInputView(theme: Theme, prepared: InputView? = null): InputView {
         val startedAt = SystemClock.elapsedRealtime()
+        val constructStart = SystemClock.elapsedRealtime()
         val newInputView = prepared ?: InputView(this, fcitx, theme)
+        SleiPerformanceMetrics.recordInputViewConstruct(
+            SystemClock.elapsedRealtime() - constructStart,
+            usedPrepared = prepared != null
+        )
+        val attachStart = SystemClock.elapsedRealtime()
         setInputView(newInputView)
         inputDeviceManager.setInputView(newInputView)
         inputView = newInputView
-        val duration = SystemClock.elapsedRealtime() - startedAt
-        SleiPerformanceMetrics.recordReplaceInputView(duration)
+        SleiPerformanceMetrics.recordInputViewAttach(SystemClock.elapsedRealtime() - attachStart)
+        SleiPerformanceMetrics.recordReplaceInputView(SystemClock.elapsedRealtime() - startedAt)
         android.util.Log.i(
             "FcitxColdStart",
-            "replaceInputView duration=${duration}ms"
+            "replaceInputView total=${SystemClock.elapsedRealtime() - startedAt}ms " +
+                "usedPrepared=${prepared != null}"
         )
         return newInputView
     }
@@ -382,6 +389,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val theme = ThemeManager.activeTheme
         val startedAt = SystemClock.elapsedRealtime()
         val input = InputView(this, fcitx, theme)
+        // Build the main/numeric keyboard hierarchies now instead of on the first
+        // popup, so switchLayout only attaches an already constructed hierarchy.
+        runCatching { input.prewarmKeyboardViews() }
         val candidates = CandidatesView(this, fcitx, theme)
         preparedViews = PreparedViews(theme, input, candidates)
         val duration = SystemClock.elapsedRealtime() - startedAt
