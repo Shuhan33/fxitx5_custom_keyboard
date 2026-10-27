@@ -54,6 +54,7 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import fcitx5.slei.performance.SleiLifecycleBreadcrumbs
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import fcitx5.slei.stats.InputStatsManager
 import fcitx5.slei.suggestions.EmailSuggestionManager
@@ -138,6 +139,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
      * Keep latest theme change while input lifecycle is unstable, and apply once it's safe.
      */
     private var pendingThemeUpdate: Theme? = null
+
+    /**
+     * Theme currently materialized into [inputView], used to drop a stale pending
+     * theme when the framework has already rebuilt the views with an equal theme.
+     */
+    private var inputViewTheme: Theme? = null
 
     private val cachedKeyEvents = LruCache<Int, KeyEvent>(78)
     private val cachedScancodes = SparseIntArray(64)
@@ -348,6 +355,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         setInputView(newInputView)
         inputDeviceManager.setInputView(newInputView)
         inputView = newInputView
+        inputViewTheme = theme
         SleiPerformanceMetrics.recordInputViewAttach(SystemClock.elapsedRealtime() - attachStart)
         SleiPerformanceMetrics.recordReplaceInputView(SystemClock.elapsedRealtime() - startedAt)
         android.util.Log.i(
@@ -405,16 +413,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     /**
-     * Theme-driven InputView replacement should only happen when IME window is stable.
-     * Applying it too early (eg. during config/input lifecycle transitions) may race with
-     * framework initViews/reset flow and leave virtual keyboard in a bad state.
+     * A pending theme change must never be applied while the keyboard window is
+     * visible: replacing InputView(s) is a seconds-long main-thread rebuild, so
+     * doing it while the user is typing freezes the keyboard (this used to be
+     * triggered on every light/dark switch), and doing it during critical
+     * lifecycle transitions races with framework initViews/reset flow leaving
+     * the virtual keyboard in a bad state. Instead, rebuild while the window is
+     * hidden ([onWindowHidden], [onFinishInputView], ...) so the cost is never
+     * visible; when the window shows again the views already carry the theme,
+     * as if it had been applied instantly.
      */
     private fun canApplyPendingThemeNow(): Boolean {
         if (!this::contentView.isInitialized) return false
         if (isInInputLifecycleCriticalPhase) return false
-        if (currentInputBinding == null) return false
-        if (!isInputViewShown) return false
-        return window.window?.decorView?.isAttachedToWindow == true
+        if (inputView == null) return false
+        if (isInputViewShown) return false
+        return true
     }
 
     private fun applyPendingThemeIfPossible() {
@@ -423,6 +437,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             if (!canApplyPendingThemeNow()) return@post
             val theme = pendingThemeUpdate ?: return@post
             pendingThemeUpdate = null
+            if (theme === inputViewTheme) {
+                // framework already rebuilt the views with this theme meanwhile
+                return@post
+            }
+            SleiLifecycleBreadcrumbs.mark("theme-apply name=${theme.name} isDark=${theme.isDark}")
             replaceInputViews(theme)
             inputView?.syncImeFromCache()
         }
@@ -439,11 +458,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     /**
-     * Theme change listener that delays InputView replacement during critical lifecycle phases.
+     * Theme change listener that defers InputView replacement until the keyboard
+     * window is hidden (see [canApplyPendingThemeNow]).
      */
     @Keep
     private val onThemeChangeListener = ThemeManager.OnThemeChangeListener { theme ->
         if (!this::contentView.isInitialized) return@OnThemeChangeListener
+        SleiLifecycleBreadcrumbs
+            .mark("theme-change name=${theme.name} isDark=${theme.isDark} shown=$isInputViewShown")
         pendingThemeUpdate = theme
         applyPendingThemeIfPossible()
     }
@@ -540,6 +562,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onCreate() {
         val startedAt = SystemClock.elapsedRealtime()
         android.util.Log.i("FcitxColdStart", "service.onCreate begin")
+        SleiLifecycleBreadcrumbs.mark("service onCreate")
         fcitx = FcitxDaemon.connect(javaClass.name)
         lifecycleScope.launch {
             jobs.consumeEach { it.join() }
@@ -1041,6 +1064,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 ActivityInfo.CONFIG_UI_MODE
         val diff = lastKnownConfig.diff(newConfig)
         Timber.d("onConfigurationChanged diff=$diff")
+        SleiLifecycleBreadcrumbs.mark(
+            "onConfigChanged diff=$diff ${if (diff and f != diff) "(reset)" else "(skip)"}"
+        )
         val hasMeaningfulDiff = diff and f != diff
         if (hasMeaningfulDiff) {
             postFcitxJob { reset() }
@@ -1060,10 +1086,19 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        SleiLifecycleBreadcrumbs.mark("onWindowShown")
         SleiPerformanceMetrics.markWindowShown()
         highlightColor =
             styledColorOrDefault(android.R.attr.colorAccent, DefaultHighlightColor).alpha(0.4f)
         InputFeedbacks.syncSystemPrefs()
+    }
+
+    override fun onWindowHidden() {
+        super.onWindowHidden()
+        SleiLifecycleBreadcrumbs.mark("onWindowHidden")
+        // Safe point to consume a deferred theme change: rebuilding InputView(s)
+        // costs seconds on the main thread, which is only invisible to the user
+        // while the keyboard window is not shown.
         applyPendingThemeIfPossible()
     }
 
@@ -1510,6 +1545,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val pkgName = pkgNameCache.forUid(uid)
         val bindingGeneration = ++inputBindingGeneration
         Timber.d("onBindInput: uid=$uid pkg=$pkgName")
+        SleiLifecycleBreadcrumbs.mark("onBindInput pkg=$pkgName uid=$uid")
         postFcitxBindingJob(bindingGeneration) {
             // ensure InputContext has been created before focusing it
             activate(uid, pkgName)
@@ -1561,6 +1597,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         android.util.Log.i("FcitxColdStart", "service.onStartInput restarting=$restarting")
         SleiPerformanceMetrics.markInputRequested()
         isInInputLifecycleCriticalPhase = true
+        SleiLifecycleBreadcrumbs.mark(
+            "onStartInput restarting=$restarting pkg=${attribute.packageName ?: "?"}"
+        )
         try {
             val inputSessionGeneration = ++this.inputSessionGeneration
             selection.resetTo(attribute.initialSelStart, attribute.initialSelEnd)
@@ -1591,6 +1630,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         android.util.Log.i("FcitxColdStart", "service.onStartInputView restarting=$restarting")
         isInInputLifecycleCriticalPhase = true
+        SleiLifecycleBreadcrumbs.mark(
+            "onStartInputView restarting=$restarting pkg=${info.packageName ?: "?"}"
+        )
         try {
             // A newly shown soft keyboard is a fresh casing session. Clear both the
             // local Shift presentation and virtual lock state before any view is reused.
@@ -1930,6 +1972,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         Timber.d("onFinishInputView: finishingInput=$finishingInput")
+        SleiLifecycleBreadcrumbs
+            .mark("onFinishInputView finishing=$finishingInput shown=$isInputViewShown")
         MainService.stopSyncService(this)
         if (VoiceInputProviderManager.isActive()) {
             VoiceInputProviderManager.stop(this)
@@ -1953,6 +1997,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onFinishInput() {
         Timber.d("onFinishInput")
+        SleiLifecycleBreadcrumbs.mark("onFinishInput")
         MainService.stopSyncService(this)
         inputView?.cancelOngoingKeyActions()
         InputStatsManager.flush()
@@ -1972,12 +2017,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val uid = currentInputBinding?.uid ?: return
         val bindingGeneration = inputBindingGeneration
         Timber.d("onUnbindInput: uid=$uid")
+        SleiLifecycleBreadcrumbs.mark("onUnbindInput uid=$uid")
         postFcitxBindingJob(bindingGeneration) {
             deactivate(uid)
         }
     }
 
     override fun onDestroy() {
+        SleiLifecycleBreadcrumbs.mark("service onDestroy")
         MainService.stopSyncService(this)
         if (this::contentView.isInitialized) {
             contentView.removeCallbacks(prewarmInputViewsRunnable)

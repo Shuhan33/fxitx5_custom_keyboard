@@ -13,6 +13,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
 import android.os.Process
+import fcitx5.slei.performance.SleiLifecycleBreadcrumbs
 import fcitx5.slei.stats.InputStatsManager
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatDelegate
@@ -161,6 +162,9 @@ class FcitxApplication : Application() {
                     // continuous crashes within 10 seconds, maybe in a crash loop. just bail
                     exitProcess(10)
                 }
+                // Record the crash as the newest breadcrumb, so the persisted
+                // report carries the leading events leading up to it.
+                SleiLifecycleBreadcrumbs.markCrash(e)
                 // Persist the stack trace to internal storage so it survives after the
                 // crash dialog is dismissed and can be reviewed in the data settings page.
                 persistCrashReport(ctx, crashTime, e)
@@ -302,6 +306,12 @@ class FcitxApplication : Application() {
                     append("thread: ").append(Thread.currentThread().name).append("\n\n")
                     append(stack)
                     if (!stack.endsWith("\n")) append('\n')
+                    // Forensic context: the exact sequence of input lifecycle events
+                    // (which app was focused, theme switches, window hidden/shown,
+                    // config changes) that preceded this crash. Older entries first.
+                    append("\n--- lifecycle breadcrumbs (old → new) ---\n")
+                    append(SleiLifecycleBreadcrumbs.snapshot())
+                    append('\n')
                 }
             )
             val files = dir.listFiles()?.sortedBy { it.name } ?: return
