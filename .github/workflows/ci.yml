@@ -188,7 +188,18 @@ jobs:
 
       - name: Generate nightly tag
         id: tag
-        run: echo "value=nightly-$(git describe --tags --long)-$(date -u +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+        shell: bash
+        run: |
+          # Derive the version from the app's Versions.kt (always updated per
+          # release) instead of git tags, which no longer match recent releases.
+          version=$(grep -oP 'baseVersionName\s*=\s*"\K[^"]+' \
+            build-logic/convention/src/main/kotlin/Versions.kt | head -n 1)
+          if [ -z "$version" ]; then
+            # fall back to git describe if the grep ever fails
+            version=$(git describe --tags --long | sed 's/-g[0-9a-f]*$//')
+          fi
+          sha=$(git rev-parse --short HEAD)
+          echo "value=nightly-${version}-g${sha}-$(date -u +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Generate release notes
         id: notes
