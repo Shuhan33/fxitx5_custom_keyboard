@@ -59,6 +59,7 @@ import fcitx5.slei.performance.SleiPerformanceMetrics
 import fcitx5.slei.stats.InputStatsManager
 import fcitx5.slei.suggestions.EmailSuggestionManager
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
@@ -1086,11 +1087,15 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        val shownStart = SystemClock.elapsedRealtime()
         SleiLifecycleBreadcrumbs.mark("onWindowShown")
         SleiPerformanceMetrics.markWindowShown()
         highlightColor =
             styledColorOrDefault(android.R.attr.colorAccent, DefaultHighlightColor).alpha(0.4f)
-        InputFeedbacks.syncSystemPrefs()
+        // cross-process Settings reads; must not run on the popup critical path
+        InputFeedbacks.syncSystemPrefsAsync()
+        SleiPerformanceMetrics
+            .recordWindowShownOverhead(SystemClock.elapsedRealtime() - shownStart)
     }
 
     override fun onWindowHidden() {
@@ -1629,6 +1634,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         android.util.Log.i("FcitxColdStart", "service.onStartInputView restarting=$restarting")
+        val prepStartedAt = SystemClock.elapsedRealtime()
         isInInputLifecycleCriticalPhase = true
         SleiLifecycleBreadcrumbs.mark(
             "onStartInputView restarting=$restarting pkg=${info.packageName ?: "?"}"
@@ -1662,11 +1668,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 candidatesView?.updateCursorAnchor(contentSize)
             }
         } finally {
+            SleiPerformanceMetrics
+                .recordStartInputPrep(SystemClock.elapsedRealtime() - prepStartedAt)
             contentView.post {
+                val deferredStartedAt = SystemClock.elapsedRealtime()
                 isInInputLifecycleCriticalPhase = false
                 applyPendingThemeIfPossible()
-                MainService.startSyncService(this, "ime-window-ready", imeSyncActive = true)
-                ensurePreferredVoiceInputProviderAvailable()
+                // PM/car-prefs/binder work must not compete with the first rendered
+                // keyboard frames — including PackageManager scans from voice
+                // keepalive and prefs+binder from clipboard sync.
+                lifecycleScope.launch(Dispatchers.IO) {
+                    MainService.startSyncService(this@FcitxInputMethodService, "ime-window-ready", imeSyncActive = true)
+                    ensurePreferredVoiceInputProviderAvailable()
+                }
+                SleiPerformanceMetrics.recordDeferredStartup(
+                    SystemClock.elapsedRealtime() - deferredStartedAt
+                )
             }
             updateStatusIcon()
         }

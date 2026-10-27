@@ -18,6 +18,10 @@ import org.fcitx.fcitx5.android.utils.appContext
 import org.fcitx.fcitx5.android.utils.audioManager
 import org.fcitx.fcitx5.android.utils.getSystemSettings
 import org.fcitx.fcitx5.android.utils.vibrator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 object InputFeedbacks {
 
@@ -27,8 +31,15 @@ object InputFeedbacks {
         Disabled(R.string.disabled);
     }
 
+    // @Volatile: refreshed from a background thread, read on the main thread by
+    // vibration/sound feedback code paths.
+    @Volatile
     private var systemSoundEffects = false
+
+    @Volatile
     private var systemHapticFeedback = false
+
+    private val systemPrefsSyncScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     fun syncSystemPrefs() {
         systemSoundEffects = getSystemSettings<Int>(Settings.System.SOUND_EFFECTS_ENABLED) == 1
@@ -36,6 +47,17 @@ object InputFeedbacks {
         // but gives no clue about how to use it, and this one still works
         @Suppress("DEPRECATION")
         systemHapticFeedback = getSystemSettings<Int>(Settings.System.HAPTIC_FEEDBACK_ENABLED) == 1
+    }
+
+    /**
+     * Refresh the cached system sound/haptics flags off the main thread. The two
+     * [Settings.System] reads are cross-process binder calls; running them in
+     * [syncSystemPrefs] on the IME main thread during [onWindowShown] added a
+     * fixed cost to every keyboard popup. First key presses right after a system
+     * setting change may use the previous tick's flags, which is harmless.
+     */
+    fun syncSystemPrefsAsync() {
+        systemPrefsSyncScope.launch { runCatching { syncSystemPrefs() } }
     }
 
     private val keyboardPrefs = AppPrefs.getInstance().keyboard

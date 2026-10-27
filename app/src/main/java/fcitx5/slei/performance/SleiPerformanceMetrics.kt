@@ -33,6 +33,9 @@ object SleiPerformanceMetrics {
     private var lastConstructUsedPrepared = false
     private val inputRequestedAt = AtomicLong(-1)
     private val inputRequestToWindowMs = AtomicLong(-1)
+    private val startInputPrepMs = AtomicLong(-1)
+    private val deferredStartupMs = AtomicLong(-1)
+    private val windowShownOverheadMs = AtomicLong(-1)
 
     fun recordServiceCreate(durationMs: Long) {
         serviceCreateMs.set(durationMs)
@@ -64,6 +67,22 @@ object SleiPerformanceMetrics {
 
     fun markInputRequested() {
         inputRequestedAt.set(SystemClock.elapsedRealtime())
+    }
+
+    /** onStartInputView synchronous preparation (caps reset, jobs, view sync). */
+    fun recordStartInputPrep(durationMs: Long) {
+        startInputPrepMs.set(durationMs)
+        persistSummary()
+    }
+
+    /** Work running right after the first popup frame (deferred startup). */
+    fun recordDeferredStartup(durationMs: Long) {
+        deferredStartupMs.set(durationMs)
+    }
+
+    /** Work measured within [onWindowShown] (theme attr + aprefs sync). */
+    fun recordWindowShownOverhead(durationMs: Long) {
+        windowShownOverheadMs.set(durationMs)
     }
 
     fun markWindowShown() {
@@ -113,6 +132,9 @@ object SleiPerformanceMetrics {
         append("onCreateInputView 总耗时：").append(inputViewCreateMs.get()).append(" ms\n")
         append("空闲预热：").append(viewPrewarmMs.get()).append(" ms\n")
         append("输入法服务启动：").append(serviceCreateMs.get()).append(" ms\n")
+        append("会话准备（startInput）：").append(startInputPrepMs.get()).append(" ms\n")
+        append("首帧后工作（sync/voice）：").append(deferredStartupMs.get()).append(" ms\n")
+        append("窗口显示开销：").append(windowShownOverheadMs.get()).append(" ms\n")
         synchronized(popups) {
             if (popups.isNotEmpty()) {
                 append("-- 最近弹出样本 --\n")
@@ -144,6 +166,9 @@ object SleiPerformanceMetrics {
         append("视图替换（onCreateInputView）：${format(inputViewCreateMs.get())}\n")
         append("空闲预热：${format(viewPrewarmMs.get())}\n")
         append("输入法服务启动：${format(serviceCreateMs.get())}\n")
+        append("会话准备（startInput）：${format(startInputPrepMs.get())}\n")
+        append("首帧后工作（sync/voice）：${format(deferredStartupMs.get())}\n")
+        append("窗口显示开销：${format(windowShownOverheadMs.get())}\n")
         synchronized(popups) {
             if (popups.isNotEmpty()) {
                 append("最近弹出样本：").append(
