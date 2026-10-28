@@ -931,4 +931,11 @@
     <string name="slei_week_total">本周共输入 %1$d 个字</string>
     <string name="slei_weekly_top_words">本周常用词句 Top 10</string>
     <string name="slei_weekly_no_words">本周还没有可统计的常用词句</string>
+    <string name="slei_stats_tab_30d">近30天</string>
+    <string name="slei_stats_tab_hours">时段</string>
+    <string name="slei_stats_tab_apps">应用</string>
+    <string name="slei_stats_days30_total">近 30 天共输入 %1$,d 个字</string>
+    <string name="slei_stats_hours_total">近 7 天共输入 %1$,d 个字</string>
+    <string name="slei_stats_apps_none">近 30 天暂无按应用统计的数据</string>
+    <string name="slei_stats_apps_range">近 30 天按输入字数排序的应用</string>
 </resources>

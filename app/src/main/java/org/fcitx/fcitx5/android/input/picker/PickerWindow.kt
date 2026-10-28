@@ -122,22 +122,36 @@ class PickerWindow(
         tabsUi.apply {
             setTabs(pickerPagesAdapter.getCategoryList())
             setOnTabClickListener { i ->
-                pickerPagesAdapter.showCategory(i)
-                strip.scrollToPosition(0)
+                strip.scrollToPosition(pickerPagesAdapter.headerPositionOf(i))
                 activateTab(i)
             }
-            activateTab(1)
+            activateTab(0)
         }
         strip.apply {
-            layoutManager = GridLayoutManager(context, density.rowCount, RecyclerView.HORIZONTAL, false)
+            layoutManager = GridLayoutManager(context, density.columnCount).apply {
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int =
+                        if (pickerPagesAdapter.isHeader(position)) spanCount else 1
+                }
+            }
             adapter = pickerPagesAdapter
             setHasFixedSize(true)
             setItemViewCacheSize(density.columnCount * density.rowCount)
             addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-                pickerPagesAdapter.updateStripWidth(v.width)
+                pickerPagesAdapter.updateStripWidth(v)
+                pickerPagesAdapter.updateStripHeight(v)
             }
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                    val lm = rv.layoutManager as? GridLayoutManager ?: return
+                    val position = lm.findFirstVisibleItemPosition()
+                    if (position != RecyclerView.NO_POSITION) {
+                        tabsUi.activateTab(pickerPagesAdapter.sectionOf(position))
+                    }
+                }
+            })
         }
-        pickerPagesAdapter.showCategory(1)
+        strip.scrollToPosition(0)
     }
 
     override fun onCreateBarExtension() = pickerLayout.tabsUi.root

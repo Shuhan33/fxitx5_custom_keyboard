@@ -27,13 +27,19 @@ import java.util.Locale
 
 @Serializable
 data class InputStatsData(
-    val formatVersion: Int = 3,
+    val formatVersion: Int = 4,
     val totalCharacters: Long = 0,
     val totalCommits: Long = 0,
     val phraseFrequency: Map<String, Long> = emptyMap(),
     val dailyCharacters: Map<String, Long> = emptyMap(),
     val weeklyPhraseFrequency: Map<String, Map<String, Long>> = emptyMap(),
     val hiddenPhrases: Set<String> = emptySet(),
+    // 日期 → 小时 → 字数，保留最近 35 天，用于小时热力图
+    val hourlyByDay: Map<String, Map<Int, Long>> = emptyMap(),
+    // 包名 → 累计字数（全量，封顶 500 个包）
+    val charactersByApp: Map<String, Long> = emptyMap(),
+    // 日期 → 包名 → 字数，保留最近 35 天，用于近 30 天应用排行
+    val charactersByAppByDay: Map<String, Map<String, Long>> = emptyMap(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
@@ -72,7 +78,7 @@ object InputStatsManager {
         }
     }
 
-    fun recordCommit(text: String, sensitive: Boolean) {
+    fun recordCommit(text: String, sensitive: Boolean, pkg: String? = null) {
         if (
             !collectionEnabled || sensitive || text.isBlank() ||
             !::applicationContext.isInitialized
@@ -97,10 +103,26 @@ object InputStatsManager {
                         .drop(MAX_PHRASES_TO_KEEP)
                         .forEach { phrases.remove(it.key) }
                 }
-                val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+                val date = java.util.Calendar.getInstance()
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(date.time)
                 val currentWeek = weekStartKey()
                 val daily = data.dailyCharacters.toMutableMap()
                 daily[today] = (daily[today] ?: 0L) + characterCount
+                val hourly = data.hourlyByDay
+                    .mapValuesTo(mutableMapOf()) { (_, hours) -> hours.toMutableMap() }
+                val hourBuckets = hourly.getOrPut(today) { mutableMapOf() }
+                hourBuckets[date.get(java.util.Calendar.HOUR_OF_DAY)] =
+                    (hourBuckets[date.get(java.util.Calendar.HOUR_OF_DAY)] ?: 0L) + characterCount
+                val appsByDay = data.charactersByAppByDay
+                    .mapValuesTo(mutableMapOf()) { (_, apps) -> apps.toMutableMap() }
+                if (pkg != null) {
+                    val appBuckets = appsByDay.getOrPut(today) { mutableMapOf() }
+                    appBuckets[pkg] = (appBuckets[pkg] ?: 0L) + characterCount
+                }
+                val charactersByApp = data.charactersByApp.toMutableMap()
+                if (pkg != null) {
+                    charactersByApp[pkg] = (charactersByApp[pkg] ?: 0L) + characterCount
+                }
                 val weekly = data.weeklyPhraseFrequency
                     .mapValuesTo(mutableMapOf()) { (_, values) -> values.toMutableMap() }
                 if (phrase != null && phrase !in data.hiddenPhrases) {
@@ -112,6 +134,9 @@ object InputStatsManager {
                     totalCommits = data.totalCommits + 1L,
                     phraseFrequency = phrases,
                     dailyCharacters = daily,
+                    hourlyByDay = hourly,
+                    charactersByApp = charactersByApp,
+                    charactersByAppByDay = appsByDay,
                     weeklyPhraseFrequency = weekly,
                     updatedAt = System.currentTimeMillis()
                 )
@@ -126,7 +151,10 @@ object InputStatsManager {
             ensureLoadedLocked()
             data.copy(
                 phraseFrequency = data.phraseFrequency.toMap(),
-                dailyCharacters = data.dailyCharacters.toMap()
+                dailyCharacters = data.dailyCharacters.toMap(),
+                hourlyByDay = data.hourlyByDay.mapValues { (_, hours) -> hours.toMap() },
+                charactersByApp = data.charactersByApp.toMap(),
+                charactersByAppByDay = data.charactersByAppByDay.mapValues { (_, apps) -> apps.toMap() }
             )
         }
     }
@@ -146,6 +174,22 @@ object InputStatsManager {
                 imported.phraseFrequency.forEach { (key, value) -> phrases[key] = (phrases[key] ?: 0L) + value }
                 val daily = data.dailyCharacters.toMutableMap()
                 imported.dailyCharacters.forEach { (key, value) -> daily[key] = (daily[key] ?: 0L) + value }
+                val hourly = data.hourlyByDay
+                    .mapValuesTo(mutableMapOf()) { (_, hours) -> hours.toMutableMap() }
+                imported.hourlyByDay.forEach { (day, hours) ->
+                    val target = hourly.getOrPut(day) { mutableMapOf() }
+                    hours.forEach { (hour, value) -> target[hour] = (target[hour] ?: 0L) + value }
+                }
+                val charactersByApp = data.charactersByApp.toMutableMap()
+                imported.charactersByApp.forEach { (pkg, value) ->
+                    charactersByApp[pkg] = (charactersByApp[pkg] ?: 0L) + value
+                }
+                val appsByDay = data.charactersByAppByDay
+                    .mapValuesTo(mutableMapOf()) { (_, apps) -> apps.toMutableMap() }
+                imported.charactersByAppByDay.forEach { (day, apps) ->
+                    val target = appsByDay.getOrPut(day) { mutableMapOf() }
+                    apps.forEach { (pkg, value) -> target[pkg] = (target[pkg] ?: 0L) + value }
+                }
                 val weekly = data.weeklyPhraseFrequency
                     .mapValuesTo(mutableMapOf()) { (_, values) -> values.toMutableMap() }
                 imported.weeklyPhraseFrequency.forEach { (week, values) ->
@@ -160,6 +204,9 @@ object InputStatsManager {
                         .sortedByDescending { it.value }.take(MAX_PHRASES_TO_KEEP)
                         .associate { it.key to it.value },
                     dailyCharacters = daily,
+                    hourlyByDay = hourly,
+                    charactersByApp = charactersByApp,
+                    charactersByAppByDay = appsByDay,
                     weeklyPhraseFrequency = weekly.mapValues { (_, values) ->
                         values.filterKeys { it !in hidden }
                     },
@@ -178,7 +225,10 @@ object InputStatsManager {
                 ClearMode.Counters -> data.copy(
                     totalCharacters = 0,
                     totalCommits = 0,
-                    dailyCharacters = emptyMap()
+                    dailyCharacters = emptyMap(),
+                    hourlyByDay = emptyMap(),
+                    charactersByApp = emptyMap(),
+                    charactersByAppByDay = emptyMap()
                 )
                 ClearMode.Phrases -> data.copy(
                     phraseFrequency = emptyMap(),
@@ -223,11 +273,20 @@ object InputStatsManager {
 
     private fun pruneWeeklyDetailsLocked() {
         val retainedWeeks = (0 until RETAINED_WEEK_COUNT).map(::weekStartKey).toSet()
-        val oldestDay = retainedWeeks.minOrNull().orEmpty()
+        // 日粒度数据（字数/小时/应用）保留最近 35 天，覆盖 30 天月视图
+        val oldestDay = dateKey(RETAINED_DAY_COUNT - 1)
+        val cappedApps = data.charactersByApp.entries
+            .sortedByDescending { it.value }.take(MAX_APP_ENTRIES)
+            .associate { it.key to it.value }
         data = data.copy(
-            formatVersion = 3,
+            formatVersion = 4,
             phraseFrequency = data.phraseFrequency.filterKeys { it !in data.hiddenPhrases },
             dailyCharacters = data.dailyCharacters.filterKeys { it >= oldestDay },
+            hourlyByDay = data.hourlyByDay.filterKeys { it >= oldestDay }
+                .mapValues { (_, hours) -> hours.filterKeys { it in 0..23 } },
+            charactersByApp = cappedApps,
+            charactersByAppByDay = data.charactersByAppByDay.filterKeys { it >= oldestDay }
+                .mapValues { (_, apps) -> apps.filterKeys { it in cappedApps } },
             weeklyPhraseFrequency = data.weeklyPhraseFrequency
                 .filterKeys { it in retainedWeeks }
                 .mapValues { (_, phrases) ->
@@ -236,6 +295,17 @@ object InputStatsManager {
                         .associate { it.key to it.value }
                 }
         )
+    }
+
+    private fun dateKey(daysAgo: Int): String {
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+            add(java.util.Calendar.DAY_OF_YEAR, -daysAgo)
+        }
+        return SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(calendar.time)
     }
 
     fun weekStartKey(weeksAgo: Int = 0): String {
@@ -302,6 +372,8 @@ object InputStatsManager {
     private const val MAX_PHRASES = 3_500
     private const val MAX_PHRASES_TO_KEEP = 3_000
     private const val MAX_WEEKLY_PHRASES = 300
+    private const val MAX_APP_ENTRIES = 500
+    private const val RETAINED_DAY_COUNT = 35
     private const val PREF_COLLECTION_ENABLED = "slei_stats_collection_enabled"
     const val RETAINED_WEEK_COUNT = 3
 }

@@ -833,10 +833,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     fun commitText(text: String, cursor: Int = -1) {
         val ic = currentInputConnection ?: return
+        val safePkg = runCatching {
+            currentInputBinding?.uid?.let { pkgNameCache.forUid(it) }
+        }.getOrNull()
         InputStatsManager.recordCommit(
             text = text,
             sensitive = capabilityFlags.has(CapabilityFlag.Password) ||
-                capabilityFlags.has(CapabilityFlag.Sensitive)
+                capabilityFlags.has(CapabilityFlag.Sensitive),
+            pkg = safePkg
         )
         // when composing text equals commit content, finish composing text as-is
         if (composing.isNotEmpty() && composingText.toString() == text) {
