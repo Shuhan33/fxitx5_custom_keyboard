@@ -37,6 +37,53 @@ object SleiPerformanceMetrics {
     private val deferredStartupMs = AtomicLong(-1)
     private val windowShownOverheadMs = AtomicLong(-1)
 
+    // ---- InputView construction segments (diagnostics for the cold build cost) ----
+    // buildMarks hold cumulative elapsed-since-start values; per-segment durations are
+    // the deltas between consecutive marks, rendered lazily in report().
+    private var buildStartAt = -1L
+    private var buildWallClock = 0L
+    private val buildMarks = mutableListOf<Pair<String, Long>>()
+    private val buildExtras = mutableListOf<String>()
+
+    /** Snapshot the start of an InputView construction; resets prior segments. */
+    fun beginBuild() {
+        buildStartAt = SystemClock.elapsedRealtime()
+        buildWallClock = System.currentTimeMillis()
+        buildMarks.clear()
+        buildExtras.clear()
+    }
+
+    /** Record a timeline mark inside the construction flow (cumulative position). */
+    fun markBuild(name: String) {
+        if (buildStartAt < 0) return
+        buildMarks.add(name to (SystemClock.elapsedRealtime() - buildStartAt))
+    }
+
+    /** Measure a self-contained construction step; emits an independent entry. */
+    fun <T> timeBuild(name: String, block: () -> T): T {
+        val startedAt = SystemClock.elapsedRealtime()
+        val result = block()
+        val duration = SystemClock.elapsedRealtime() - startedAt
+        if (buildStartAt >= 0) buildExtras.add("$name=${duration}ms")
+        return result
+    }
+
+    fun addBuildExtra(name: String, durationMs: Long) {
+        if (buildStartAt >= 0) buildExtras.add("$name=${durationMs}ms")
+    }
+
+    private fun buildSegmentsString(): String {
+        if (buildMarks.isEmpty()) return ""
+        val out = StringBuilder()
+        var previous = 0L
+        buildMarks.forEachIndexed { index, (name, cumulative) ->
+            if (index > 0) out.append(" / ")
+            out.append(name).append('=').append(cumulative - previous).append("ms")
+            previous = cumulative
+        }
+        return out.toString()
+    }
+
     fun recordServiceCreate(durationMs: Long) {
         serviceCreateMs.set(durationMs)
         persistSummary()
@@ -128,6 +175,14 @@ object SleiPerformanceMetrics {
         append("输入视图构建：").append(inputViewConstructMs.get()).append(" ms")
         if (lastConstructUsedPrepared) append("（复用预热视图）")
         append('\n')
+        val segments = buildSegmentsString()
+        if (segments.isNotEmpty()) {
+            append("最近一次视图构建（").append(timestamp(buildWallClock)).append("）分段：")
+                .append(segments).append('\n')
+        }
+        if (buildExtras.isNotEmpty()) {
+            append("构建明细（同一次构建）：").append(buildExtras.take(12).joinToString(" ")).append('\n')
+        }
         append("输入视图挂载：").append(inputViewAttachMs.get()).append(" ms\n")
         append("onCreateInputView 总耗时：").append(inputViewCreateMs.get()).append(" ms\n")
         append("空闲预热：").append(viewPrewarmMs.get()).append(" ms\n")

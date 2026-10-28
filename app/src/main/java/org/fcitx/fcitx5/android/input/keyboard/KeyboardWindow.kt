@@ -25,6 +25,7 @@ import org.fcitx.fcitx5.android.input.bar.KawaiiBarComponent
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.broadcast.ReturnKeyDrawableComponent
 import org.fcitx.fcitx5.android.data.theme.IconThemeManager
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
@@ -94,12 +95,15 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
 
     private fun getOrCreateKeyboard(name: String): BaseKeyboard? {
         keyboards[name]?.let { return it }
-        val keyboard = when (name) {
-            TextKeyboard.Name -> TextKeyboard(context, theme)
-            NumberKeyboard.Name -> NumberKeyboard(context, theme)
-            JapaneseKanaKeyboard.Name -> JapaneseKanaKeyboard(context, theme)
-            else -> return null
+        val keyboard = SleiPerformanceMetrics.timeBuild("kb:$name") {
+            when (name) {
+                TextKeyboard.Name -> TextKeyboard(context, theme)
+                NumberKeyboard.Name -> NumberKeyboard(context, theme)
+                JapaneseKanaKeyboard.Name -> JapaneseKanaKeyboard(context, theme)
+                else -> null
+            }
         }
+        if (keyboard == null) return null
         keyboards[name] = keyboard
         return keyboard
     }

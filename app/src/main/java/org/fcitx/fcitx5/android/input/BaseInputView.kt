@@ -27,6 +27,7 @@ import org.fcitx.fcitx5.android.data.theme.ThemePrefs
 import org.fcitx.fcitx5.android.utils.item
 import org.fcitx.fcitx5.android.utils.navbarFrameHeight
 import org.fcitx.fcitx5.android.utils.styledColorOrDefault
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import splitties.views.dsl.core.withTheme
 import kotlin.math.max
 
@@ -35,6 +36,12 @@ abstract class BaseInputView(
     val fcitx: FcitxConnection,
     val theme: Theme
 ) : ConstraintLayout(service) {
+
+    // Construction timeline anchor. Placed as the first member declaration so it
+    // runs immediately after the super ctor, before any subclass property build.
+    init {
+        SleiPerformanceMetrics.beginBuild()
+    }
 
     /**
      * Update UI (from cached events in FcitxAPI) to match fcitx's state, before ready to receive real events

@@ -79,6 +79,7 @@ import org.fcitx.fcitx5.android.input.picker.emoticonPicker
 import org.fcitx.fcitx5.android.input.picker.symbolPicker
 import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.font.FontProviders
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.preedit.PreeditComponent
 import org.fcitx.fcitx5.android.input.status.ButtonsAdjustingWindow
 import org.fcitx.fcitx5.android.input.status.StatusAreaWindow
@@ -1490,25 +1491,26 @@ class InputView(
     private val punctuation = PunctuationComponent()
     private val returnKeyDrawable = ReturnKeyDrawableComponent()
     private val preeditEmptyState = PreeditEmptyStateComponent()
-    private val preedit = PreeditComponent()
+    private val preedit = SleiPerformanceMetrics.timeBuild("preedit") { PreeditComponent() }
     private val auxBarContainer = FlexboxLayout(context).apply {
         flexWrap = FlexWrap.WRAP
         alpha = 0.8f
     }
-    private val auxBarScrollView = NestedScrollView(context).apply {
+    private val auxBarScrollView = SleiPerformanceMetrics.timeBuild("auxBar") { NestedScrollView(context).apply {
         visibility = View.GONE
         clipChildren = true
         clipToPadding = true
         isFillViewport = false
         addView(auxBarContainer)
         (auxBarContainer.layoutParams as android.widget.FrameLayout.LayoutParams).gravity = Gravity.BOTTOM
-    }
+    } }
     private val commonKeyActionListener = CommonKeyActionListener()
     private var resourcesDisposed = false
     private val windowManager = InputWindowManager()
-    private val kawaiiBar = KawaiiBarComponent()
-    private val horizontalCandidate = HorizontalCandidateComponent()
-    private val keyboardWindow = KeyboardWindow()
+    private val kawaiiBar = SleiPerformanceMetrics.timeBuild("kawaiiBar") { KawaiiBarComponent() }
+    private val horizontalCandidate =
+        SleiPerformanceMetrics.timeBuild("candidatesBar") { HorizontalCandidateComponent() }
+    private val keyboardWindow = SleiPerformanceMetrics.timeBuild("keyboardWindow") { KeyboardWindow() }
     private val symbolPicker = symbolPicker()
     private val emojiPicker = emojiPicker()
     private val emoticonPicker = emoticonPicker()
@@ -2820,6 +2822,7 @@ class InputView(
     }
 
     init {
+        SleiPerformanceMetrics.markBuild("base+props")
         oneHandOnRight = getStoredOneHandSide()
 
         // MUST call before any operation
@@ -2846,6 +2849,7 @@ class InputView(
                 updateKeyboardSize()
             }
         }
+        SleiPerformanceMetrics.markBuild("session+windows")
 
         broadcaster.onImeUpdate(fcitx.runImmediately { inputMethodEntryCached })
 
@@ -2858,10 +2862,11 @@ class InputView(
         }
         customBackground.imageDrawable = theme.backgroundDrawable(keyBorder)
         updateBlurMaskThemeData()
-        
+
         if (windowManager.view.id == View.NO_ID) {
             windowManager.view.id = View.generateViewId()
         }
+        SleiPerformanceMetrics.markBuild("bg+blur")
 
         keyboardView = constraintLayout {
             id = View.generateViewId()
@@ -3230,6 +3235,7 @@ class InputView(
         }
         // Sync handles when size changes
         updateHandlePosition()
+        SleiPerformanceMetrics.markBuild("layout+rest")
     }
 
     private fun updateKeyboardTopBarPosition() {
