@@ -347,7 +347,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private fun replaceInputView(theme: Theme, prepared: InputView? = null): InputView {
         val startedAt = SystemClock.elapsedRealtime()
         val constructStart = SystemClock.elapsedRealtime()
-        val newInputView = prepared ?: InputView(this, fcitx, theme)
+        val newInputView = prepared ?: run {
+            // Cold path (no prewarmed view, e.g. theme-triggered rebuild): anchor the
+            // construction timeline here so segments/extras survive the whole build.
+            SleiPerformanceMetrics.beginBuild()
+            InputView(this, fcitx, theme)
+        }
         SleiPerformanceMetrics.recordInputViewConstruct(
             SystemClock.elapsedRealtime() - constructStart,
             usedPrepared = prepared != null
@@ -399,10 +404,12 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         if (preparedViews != null || inputView != null || candidatesView != null) return
         val theme = ThemeManager.activeTheme
         val startedAt = SystemClock.elapsedRealtime()
+        SleiPerformanceMetrics.beginBuild()
         val input = InputView(this, fcitx, theme)
         // Build the main/numeric keyboard hierarchies now instead of on the first
         // popup, so switchLayout only attaches an already constructed hierarchy.
         runCatching { input.prewarmKeyboardViews() }
+        SleiPerformanceMetrics.markBuild("kbPre")
         val candidates = SleiPerformanceMetrics
             .timeBuild("candidatesView") { CandidatesView(this, fcitx, theme) }
         preparedViews = PreparedViews(theme, input, candidates)

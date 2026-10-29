@@ -3235,7 +3235,6 @@ class InputView(
         }
         // Sync handles when size changes
         updateHandlePosition()
-        SleiPerformanceMetrics.markBuild("layout+rest")
     }
 
     private fun updateKeyboardTopBarPosition() {
@@ -3484,6 +3483,9 @@ class InputView(
         ConfigProviders.addButtonsLayoutListener(onButtonsLayoutChangeListener)
         // Register listener for button icon file changes (hot-reload)
         ConfigProviders.addIconChangeListener(onIconChangeListener)
+        // True end of the InputView construction flow: every property initializer
+        // has run (properties between the two init blocks run right before this).
+        SleiPerformanceMetrics.markBuild("layout+rest")
     }
 
     internal fun cancelOngoingKeyActions() {
