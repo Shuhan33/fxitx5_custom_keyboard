@@ -11,6 +11,7 @@ import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 object SleiPerformanceMetrics {
@@ -25,6 +26,13 @@ object SleiPerformanceMetrics {
     private val popupTotal = AtomicLong(0)
 
     private val serviceCreateMs = AtomicLong(-1)
+    // Service instance lifecycle breadcrumbs: system can destroy and recreate the
+    // InputMethodService instance (process surviving) while the keyboard is hidden;
+    // every such recreation loses the prepared views and forces a full cold rebuild.
+    private val serviceCreateCount = AtomicInteger(0)
+    private val lastServiceDestroyWallClock = AtomicLong(-1)
+    private val themeRebuildCount = AtomicInteger(0)
+    private val lastThemeRebuildWallClock = AtomicLong(-1)
     private val inputViewCreateMs = AtomicLong(-1)
     private val inputViewConstructMs = AtomicLong(-1)
     private val inputViewAttachMs = AtomicLong(-1)
@@ -132,6 +140,22 @@ object SleiPerformanceMetrics {
         windowShownOverheadMs.set(durationMs)
     }
 
+    /** A deferred pending-theme rebuild actually replaced the InputView(s). */
+    fun markThemeRebuild() {
+        themeRebuildCount.incrementAndGet()
+        lastThemeRebuildWallClock.set(System.currentTimeMillis())
+    }
+
+    /** Service instance created (onCreate). */
+    fun markServiceCreate() {
+        serviceCreateCount.incrementAndGet()
+    }
+
+    /** Service instance destroyed by the system (onDestroy); process may survive. */
+    fun markServiceDestroy() {
+        lastServiceDestroyWallClock.set(System.currentTimeMillis())
+    }
+
     fun markWindowShown() {
         val start = inputRequestedAt.getAndSet(-1)
         if (start < 0) return
@@ -187,6 +211,16 @@ object SleiPerformanceMetrics {
         append("onCreateInputView 总耗时：").append(inputViewCreateMs.get()).append(" ms\n")
         append("空闲预热：").append(viewPrewarmMs.get()).append(" ms\n")
         append("输入法服务启动：").append(serviceCreateMs.get()).append(" ms\n")
+        append("输入法服务实例：").append(serviceCreateCount.get()).append(" 次")
+        val destroyedAt = lastServiceDestroyWallClock.get()
+        if (destroyedAt > 0) {
+            append("（上次实例销毁：").append(timestamp(destroyedAt)).append("）")
+        }
+        append('\n')
+        if (themeRebuildCount.get() > 0) {
+            append("主题切换重建：").append(themeRebuildCount.get()).append(" 次")
+                .append("（最近：").append(timestamp(lastThemeRebuildWallClock.get())).append("）\n")
+        }
         append("会话准备（startInput）：").append(startInputPrepMs.get()).append(" ms\n")
         append("首帧后工作（sync/voice）：").append(deferredStartupMs.get()).append(" ms\n")
         append("窗口显示开销：").append(windowShownOverheadMs.get()).append(" ms\n")
@@ -221,6 +255,7 @@ object SleiPerformanceMetrics {
         append("视图替换（onCreateInputView）：${format(inputViewCreateMs.get())}\n")
         append("空闲预热：${format(viewPrewarmMs.get())}\n")
         append("输入法服务启动：${format(serviceCreateMs.get())}\n")
+        append("服务实例：${serviceCreateCount.get()} 次（主题切换重建 ${themeRebuildCount.get()} 次）\n")
         append("会话准备（startInput）：${format(startInputPrepMs.get())}\n")
         append("首帧后工作（sync/voice）：${format(deferredStartupMs.get())}\n")
         append("窗口显示开销：${format(windowShownOverheadMs.get())}\n")

@@ -453,6 +453,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 return@post
             }
             SleiLifecycleBreadcrumbs.mark("theme-apply name=${theme.name} isDark=${theme.isDark}")
+            SleiPerformanceMetrics.markThemeRebuild()
             replaceInputViews(theme)
             inputView?.syncImeFromCache()
         }
@@ -574,6 +575,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val startedAt = SystemClock.elapsedRealtime()
         android.util.Log.i("FcitxColdStart", "service.onCreate begin")
         SleiLifecycleBreadcrumbs.mark("service onCreate")
+        SleiPerformanceMetrics.markServiceCreate()
         fcitx = FcitxDaemon.connect(javaClass.name)
         lifecycleScope.launch {
             jobs.consumeEach { it.join() }
@@ -2056,6 +2058,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
 
     override fun onDestroy() {
         SleiLifecycleBreadcrumbs.mark("service onDestroy")
+        SleiPerformanceMetrics.markServiceDestroy()
         MainService.stopSyncService(this)
         if (this::contentView.isInitialized) {
             contentView.removeCallbacks(prewarmInputViewsRunnable)

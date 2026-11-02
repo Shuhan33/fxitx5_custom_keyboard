@@ -4,9 +4,11 @@
 package org.fcitx.fcitx5.android.input.font
 
 import android.graphics.Typeface
+import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.config.ConfigProviders
 import java.io.File
 
@@ -117,11 +119,18 @@ class DefaultFontProvider : FontProviderApi {
             }.getOrNull()
             cachedTypefaceByPaths[validPaths] = loaded
             if (validPaths.isNotEmpty()) {
+                val duration = SystemClock.elapsedRealtime() - startedAt
                 Log.i(
                     "FcitxColdStart",
                     "font key=$key files=${validPaths.size} loaded=${loaded != null} " +
-                        "duration=${SystemClock.elapsedRealtime() - startedAt}ms"
+                        "duration=${duration}ms"
                 )
+                // Main-thread loads are the ones paid inside a keyboard build; record
+                // them so the diagnostics can attribute the kb: segment cost to font
+                // re-parsing (background preload threads never enter a build window).
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    SleiPerformanceMetrics.addBuildExtra("font:$key", duration)
+                }
             }
             loaded
         }

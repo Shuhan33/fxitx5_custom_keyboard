@@ -261,13 +261,11 @@ class FcitxApplication : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         ClipboardAdapter.trimMemory(level)
-        // Android sends TRIM_MEMORY_UI_HIDDEN whenever the keyboard disappears. Marking
-        // fonts as changed here forced a full InputView rebuild on the next tap, even though
-        // the configured fonts had not changed. Keep the tiny Typeface cache for ordinary
-        // background transitions and only release reloadable metadata under real pressure.
-        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-            FontProviders.trimMemory()
-        }
+        // Never release the font caches on trims. Real fontset changes are pushed by
+        // ConfigProviders' file watcher, so a trim can never leave the caches stale;
+        // releasing Typeface objects only re-arms the next keyboard build to re-parse
+        // (possibly multi-megabyte) font files on the main thread, which measured as
+        // the dominant segment of mid-session cold rebuilds (kb:Text 1.5-1.9s).
     }
 
     override fun onLowMemory() {
