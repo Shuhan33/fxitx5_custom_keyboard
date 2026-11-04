@@ -92,6 +92,142 @@ object SleiPerformanceMetrics {
         return out.toString()
     }
 
+    // ---- BaseKeyboard.reloadLayout() segment probe ----
+    // A probe is open only between beginReloadLayout() and endReloadLayout(). Every hook reads
+    // the nullable field first, so outside a reload a hook costs one null check; KeyView
+    // internals are timed only while a reload is in progress. Keyboards are created and
+    // reloaded on the main thread, so the probe itself is not synchronized.
+    private class ReloadLayoutProbe(
+        val keyboard: String,
+        val wallClockMs: Long,
+        val startNs: Long
+    ) {
+        var reused = false
+        var keyPhase = false
+        var totalNs = 0L
+        // Durations summed by segment name ("r:*" top level, "r:keys"/"r:rows" inside the
+        // build, "k:*" per createKeyView step, "kv:*" inside KeyView construction).
+        val segmentsNs = LinkedHashMap<String, Long>()
+        val segmentCounts = HashMap<String, Int>()
+        // Total createKeyView duration per key of the row build, in call order.
+        val keyNs = ArrayList<Long>(64)
+    }
+
+    private const val MAX_RELOAD_HISTORY = 12
+    private var reloadProbe: ReloadLayoutProbe? = null
+    private val reloadHistory = ArrayDeque<ReloadLayoutProbe>(MAX_RELOAD_HISTORY)
+
+    /** Opens the probe for one reloadLayout() call of [keyboard]. */
+    fun beginReloadLayout(keyboard: String) {
+        reloadProbe = ReloadLayoutProbe(
+            keyboard, System.currentTimeMillis(), SystemClock.elapsedRealtimeNanos()
+        )
+    }
+
+    /** Start instant (ns) of a timed reload segment; 0 when no probe is open. */
+    fun reloadStart(): Long = if (reloadProbe != null) SystemClock.elapsedRealtimeNanos() else 0L
+
+    /** Start instant (ns) of a createKeyView step; 0 unless inside the row build phase. */
+    fun reloadKeyStart(): Long {
+        val probe = reloadProbe ?: return 0L
+        return if (probe.keyPhase) SystemClock.elapsedRealtimeNanos() else 0L
+    }
+
+    /** Adds the time since [startNs] to the named segment (no-op when [startNs] is 0). */
+    fun reloadEnd(name: String, startNs: Long) {
+        if (startNs == 0L) return
+        val probe = reloadProbe ?: return
+        val duration = SystemClock.elapsedRealtimeNanos() - startNs
+        probe.segmentsNs[name] = (probe.segmentsNs[name] ?: 0L) + duration
+        probe.segmentCounts[name] = (probe.segmentCounts[name] ?: 0) + 1
+    }
+
+    /** Records one createKeyView total of the row build phase (no-op when [startNs] is 0). */
+    fun reloadKeyEnd(startNs: Long) {
+        if (startNs == 0L) return
+        val probe = reloadProbe ?: return
+        probe.keyNs.add(SystemClock.elapsedRealtimeNanos() - startNs)
+    }
+
+    fun setReloadKeyPhase(active: Boolean) {
+        reloadProbe?.keyPhase = active
+    }
+
+    fun markReloadRows(reused: Boolean) {
+        reloadProbe?.reused = reused
+    }
+
+    /** Times an expression-valued KeyView part (e.g. a property initializer) into the open probe. */
+    inline fun <T> timeReload(name: String, block: () -> T): T {
+        val startNs = reloadStart()
+        val result = block()
+        reloadEnd(name, startNs)
+        return result
+    }
+
+    /** Closes the probe and keeps it in the bounded history used by the report. */
+    fun endReloadLayout() {
+        val probe = reloadProbe ?: return
+        reloadProbe = null
+        probe.totalNs = SystemClock.elapsedRealtimeNanos() - probe.startNs
+        synchronized(reloadHistory) {
+            reloadHistory.addLast(probe)
+            while (reloadHistory.size > MAX_RELOAD_HISTORY) reloadHistory.removeFirst()
+        }
+    }
+
+    private fun reloadLayoutReport(): String {
+        val samples = synchronized(reloadHistory) { reloadHistory.toList() }
+        if (samples.isEmpty()) return ""
+        return buildString {
+            append("键盘重排分段（BaseKeyboard.reloadLayout，最近 ${samples.size} 次，单位 ms）：\n")
+            samples.forEach { appendReloadSample(it) }
+        }
+    }
+
+    private fun StringBuilder.appendReloadSample(probe: ReloadLayoutProbe) {
+        val segments = probe.segmentsNs
+        fun ns(name: String): Long = segments[name] ?: 0L
+        val topLevel = listOf("r:prep", "r:sig", "r:layout", "r:build", "r:aux", "r:place", "r:rest")
+        val attributed = topLevel.sumOf { ns(it) }
+        append(probe.keyboard).append(if (probe.reused) " 复用缓存" else " 现场构建")
+            .append("（").append(timestamp(probe.wallClockMs)).append("）")
+            .append(" 总计 ").append(msText(probe.totalNs))
+            .append("，未归类 ").append(msText(probe.totalNs - attributed)).append('\n')
+        append("  分段：")
+        topLevel.forEach { append(it.removePrefix("r:")).append(' ').append(msText(ns(it))).append("  ") }
+        append('\n')
+        if (probe.reused) return
+        val keys = probe.keyNs
+        val restKeys = keys.drop(1).sorted()
+        val median = when {
+            restKeys.isEmpty() -> 0L
+            restKeys.size % 2 == 1 -> restKeys[restKeys.size / 2]
+            else -> (restKeys[restKeys.size / 2 - 1] + restKeys[restKeys.size / 2]) / 2
+        }
+        append("  按键 ").append(keys.size).append(" 个：首键 ").append(msText(keys.firstOrNull() ?: 0L))
+            .append("，其余中位数 ").append(msText(median))
+            .append("，最大 ").append(msText(keys.maxOrNull() ?: 0L)).append('\n')
+        append("  build 内：keys ").append(msText(ns("r:keys")))
+            .append("（resolve ").append(msText(ns("k:resolve")))
+            .append(" / ctor ").append(msText(ns("k:ctor")))
+            .append(" / apply ").append(msText(ns("k:apply")))
+            .append(" / fonts ").append(msText(ns("k:fonts")))
+            .append("），rows ").append(msText(ns("r:rows")))
+            .append("，其它 ").append(msText(ns("r:build") - ns("r:keys") - ns("r:rows"))).append('\n')
+        val viewParts = segments.filterKeys { it.startsWith("kv:") }
+        if (viewParts.isNotEmpty()) {
+            append("  KeyView 内（嵌套计入，可与上面重叠）：")
+            viewParts.forEach { (name, value) ->
+                append(name.removePrefix("kv:")).append(' ').append(msText(value))
+                    .append('(').append(probe.segmentCounts[name] ?: 0).append("次)  ")
+            }
+            append('\n')
+        }
+    }
+
+    private fun msText(ns: Long): String = String.format(Locale.ROOT, "%.1f", ns / 1_000_000.0)
+
     fun recordServiceCreate(durationMs: Long) {
         serviceCreateMs.set(durationMs)
         persistSummary()
@@ -207,6 +343,7 @@ object SleiPerformanceMetrics {
         if (buildExtras.isNotEmpty()) {
             append("构建明细（同一次构建）：").append(buildExtras.take(12).joinToString(" ")).append('\n')
         }
+        append(reloadLayoutReport())
         append("输入视图挂载：").append(inputViewAttachMs.get()).append(" ms\n")
         append("onCreateInputView 总耗时：").append(inputViewCreateMs.get()).append(" ms\n")
         append("空闲预热：").append(viewPrewarmMs.get()).append(" ms\n")

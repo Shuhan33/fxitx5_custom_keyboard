@@ -16,6 +16,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.data.theme.IconThemeManager
 import android.text.TextPaint
 import android.util.TypedValue
@@ -83,6 +84,7 @@ abstract class KeyView(
     private val specialKeyOvalShapeEnabled: Boolean
 
     init {
+        val tPrefs = SleiPerformanceMetrics.reloadStart()
         val prefs = ThemeManager.prefs
         bordered = prefs.keyBorder.getValue()
         borderStroke = prefs.keyBorderStroke.getValue()
@@ -100,6 +102,7 @@ abstract class KeyView(
         cornerLabelHorizontalSafeInset = dp(3)
         cornerLabelTopSafeInset = dp(1)
         specialKeyOvalShapeEnabled = prefs.specialKeyOvalShape.getValue()
+        SleiPerformanceMetrics.reloadEnd("kv:prefs", tPrefs)
     }
 
     private val cachedLocation = intArrayOf(0, 0)
@@ -136,12 +139,15 @@ abstract class KeyView(
      * `AppearanceView` in the inner [ConstraintLayout], it can be smaller than its parent,
      * and holds the [bounds] for popup.
      */
-    protected val appearanceView = constraintLayout {
-        // sync any state from parent
-        isDuplicateParentStateEnabled = true
+    protected val appearanceView = SleiPerformanceMetrics.timeReload("kv:appearance") {
+        constraintLayout {
+            // sync any state from parent
+            isDuplicateParentStateEnabled = true
+        }
     }
 
     init {
+        val tInit = SleiPerformanceMetrics.reloadStart()
         // View is enabled by default. Calling the overridden setter here resolved the same
         // disabledAlpha theme attribute once per key during cold start.
         appearanceView.alpha = 1f
@@ -160,6 +166,7 @@ abstract class KeyView(
             setupPressHighlight()
         }
         add(appearanceView, lParams(matchParent, matchParent))
+        SleiPerformanceMetrics.reloadEnd("kv:init", tInit)
     }
 
     /**
@@ -172,9 +179,11 @@ abstract class KeyView(
 
     private fun resolveMonetColor(resourceName: String?): Int? {
         val name = resourceName?.takeIf { it.isNotBlank() } ?: return null
+        val tMonet = SleiPerformanceMetrics.reloadStart()
         val colorResId = context.resources.getIdentifier(name, "color", "android")
-        if (colorResId == 0) return null
-        return runCatching { context.getColor(colorResId) }.getOrNull()
+        val resolved = if (colorResId == 0) null else runCatching { context.getColor(colorResId) }.getOrNull()
+        SleiPerformanceMetrics.reloadEnd("kv:monet", tMonet)
+        return resolved
     }
 
     private fun resolveThemeTokenColor(theme: Theme, token: String): Int? {
@@ -458,27 +467,29 @@ open class TextKeyView(
         )
     }
 
-    val mainText = view(::AutoScaleTextView) {
-        isClickable = false
-        isFocusable = false
-        background = null
-        scaleMode = AutoScaleTextView.Mode.Proportional
-        gravity = Gravity.CENTER
-        text = def.displayText
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, baseMainTextSizeSp)
-        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
-        // Set font key for batch setting in BaseKeyboard.reloadLayout()
-        fontKey = "key_main_font"
-        setTypeface(typeface, def.textStyle)
-        setTextColor(
-            resolveTextColor(
-                when (def.variant) {
-                    Variant.Normal -> theme.keyTextColor
-                    Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
-                    Variant.Accent -> theme.accentKeyTextColor
-                }
+    val mainText = SleiPerformanceMetrics.timeReload("kv:mainText") {
+        view(::AutoScaleTextView) {
+            isClickable = false
+            isFocusable = false
+            background = null
+            scaleMode = AutoScaleTextView.Mode.Proportional
+            gravity = Gravity.CENTER
+            text = def.displayText
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, baseMainTextSizeSp)
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+            // Set font key for batch setting in BaseKeyboard.reloadLayout()
+            fontKey = "key_main_font"
+            setTypeface(typeface, def.textStyle)
+            setTextColor(
+                resolveTextColor(
+                    when (def.variant) {
+                        Variant.Normal -> theme.keyTextColor
+                        Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                        Variant.Accent -> theme.accentKeyTextColor
+                    }
+                )
             )
-        )
+        }
     }
 
     init {
@@ -539,26 +550,28 @@ class AltTextKeyView(
     )
     private var lastLayoutMode: AltTextLayoutMode? = null
 
-    val altText = view(::AutoScaleTextView) {
-        isClickable = false
-        isFocusable = false
-        scaleMode = AutoScaleTextView.Mode.Proportional
-        gravity = Gravity.CENTER
-        setPadding(hMargin, 0, hMargin, 0)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, baseAltTextSizeSp)
-        // Set font key for batch setting in BaseKeyboard.reloadLayout()
-        fontKey = "key_alt_font"
-        setTypeface(typeface, Typeface.BOLD)
-        text = def.altText
-        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
-        setTextColor(
-            resolveAltTextColor(
-                when (def.variant) {
-                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
-                    Variant.Accent -> theme.accentKeyTextColor
-                }
+    val altText = SleiPerformanceMetrics.timeReload("kv:altText") {
+        view(::AutoScaleTextView) {
+            isClickable = false
+            isFocusable = false
+            scaleMode = AutoScaleTextView.Mode.Proportional
+            gravity = Gravity.CENTER
+            setPadding(hMargin, 0, hMargin, 0)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, baseAltTextSizeSp)
+            // Set font key for batch setting in BaseKeyboard.reloadLayout()
+            fontKey = "key_alt_font"
+            setTypeface(typeface, Typeface.BOLD)
+            text = def.altText
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+            setTextColor(
+                resolveAltTextColor(
+                    when (def.variant) {
+                        Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                        Variant.Accent -> theme.accentKeyTextColor
+                    }
+                )
             )
-        )
+        }
     }
 
     private fun applyTopRightAltTextPadding() {
@@ -798,25 +811,27 @@ class ImageAltTextKeyView(
         )
     }
 
-    val altText = view(::AutoScaleTextView) {
-        isClickable = false
-        isFocusable = false
-        scaleMode = AutoScaleTextView.Mode.Proportional
-        gravity = Gravity.CENTER
-        setPadding(hMargin, 0, hMargin, 0)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, baseAltTextSizeSp)
-        fontKey = "key_alt_font"
-        setTypeface(typeface, Typeface.BOLD)
-        text = def.altText
-        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
-        setTextColor(
-            resolveAltTextColor(
-                when (def.variant) {
-                    Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
-                    Variant.Accent -> theme.accentKeyTextColor
-                }
+    val altText = SleiPerformanceMetrics.timeReload("kv:altText") {
+        view(::AutoScaleTextView) {
+            isClickable = false
+            isFocusable = false
+            scaleMode = AutoScaleTextView.Mode.Proportional
+            gravity = Gravity.CENTER
+            setPadding(hMargin, 0, hMargin, 0)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, baseAltTextSizeSp)
+            fontKey = "key_alt_font"
+            setTypeface(typeface, Typeface.BOLD)
+            text = def.altText
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+            setTextColor(
+                resolveAltTextColor(
+                    when (def.variant) {
+                        Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                        Variant.Accent -> theme.accentKeyTextColor
+                    }
+                )
             )
-        )
+        }
     }
 
     private fun applyTopRightAltTextPadding() {

@@ -41,6 +41,7 @@ import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import fcitx5.slei.performance.SleiPerformanceMetrics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.fcitx.fcitx5.android.core.AuxBarAction
@@ -314,6 +315,8 @@ abstract class BaseKeyboard(
 
     protected open fun reloadLayout() {
         val startedAt = SystemClock.elapsedRealtime()
+        SleiPerformanceMetrics.beginReloadLayout(javaClass.simpleName)
+        val tPrep = SleiPerformanceMetrics.reloadStart()
         // Detach ripple-occluder listeners from views of the outgoing tree before it is
         // discarded or cached; the ripple view itself is recreated on every reload.
         keyboardWaterRippleView?.setOccluders(emptyList())
@@ -342,38 +345,65 @@ abstract class BaseKeyboard(
         spaceKeys.clear()
         releaseAllTouchTargets()
         composeAwareKeys.clear()
+        SleiPerformanceMetrics.reloadEnd("r:prep", tPrep)
 
+        val tSplit = SleiPerformanceMetrics.reloadStart()
         val splitKeyboard = splitKeyboardManager.shouldUseSplitKeyboard(width)
         lastSplitLandscapeState = splitKeyboard
+        SleiPerformanceMetrics.reloadEnd("r:sig", tSplit)
+
+        val tLayout = SleiPerformanceMetrics.reloadStart()
         val rows = keyLayout
         rowHeightPercents = resolveRowHeightPercents(rows)
+        SleiPerformanceMetrics.reloadEnd("r:layout", tLayout)
 
+        val tLookup = SleiPerformanceMetrics.reloadStart()
         val rowsSignature = currentRowsSignature(splitKeyboard)
         val cachedRows = reusableRowsCache[rowsSignature]
         // Reuse only when the cached rows were built from the exact same KeyDef instances;
         // providers that re-create defs on every call (e.g. the builtin fallback layout)
         // then rebuild instead of silently re-registering mismatched state.
-        keyRows = if (cachedRows != null && cachedRows.defs === rows &&
+        val reusableRows = if (cachedRows != null && cachedRows.defs === rows &&
             registerReusableRowState(rows, cachedRows.containers)
         ) {
-            cachedRows.containers
+            cachedRows
         } else {
+            null
+        }
+        SleiPerformanceMetrics.reloadEnd("r:sig", tLookup)
+        SleiPerformanceMetrics.markReloadRows(reusableRows != null)
+
+        keyRows = if (reusableRows != null) {
+            reusableRows.containers
+        } else {
+            val tBuild = SleiPerformanceMetrics.reloadStart()
             val built = rows.map { row ->
+                SleiPerformanceMetrics.setReloadKeyPhase(true)
+                val tKeys = SleiPerformanceMetrics.reloadStart()
                 val keyViews = row.map(::createKeyView).apply {
                     // Batch apply fontset mappings for all key labels.
+                    val tFonts = SleiPerformanceMetrics.reloadStart()
                     forEach(::applyConfiguredFonts)
+                    SleiPerformanceMetrics.reloadEnd("k:fonts", tFonts)
                 }
-                if (splitKeyboard) {
+                SleiPerformanceMetrics.reloadEnd("r:keys", tKeys)
+                SleiPerformanceMetrics.setReloadKeyPhase(false)
+                val tRows = SleiPerformanceMetrics.reloadStart()
+                val rowView = if (splitKeyboard) {
                     buildSplitRow(row, keyViews)
                 } else {
                     buildRegularRow(row, keyViews)
                 }
+                SleiPerformanceMetrics.reloadEnd("r:rows", tRows)
+                rowView
             }
             reusableRowsCache[rowsSignature] = ReusableRows(rows, built)
+            SleiPerformanceMetrics.reloadEnd("r:build", tBuild)
             built
         }
         lastRowsSignature = rowsSignature
 
+        val tAux = SleiPerformanceMetrics.reloadStart()
         val auxBarConfig = auxBarConfig
         if (auxBarConfig != null && auxBarConfig.position != AuxBarPosition.AbovePreedit) {
             val isVertical = auxBarConfig.position == AuxBarPosition.Left || auxBarConfig.position == AuxBarPosition.Right
@@ -577,6 +607,7 @@ abstract class BaseKeyboard(
                     auxBarPinnedAdapter?.applyConfiguredFonts(pinnedRv)
                 }
             }
+            SleiPerformanceMetrics.reloadEnd("r:aux", tAux)
         } else {
             keyRows.forEachIndexed { index, row ->
                 add(row, lParams {
@@ -589,8 +620,10 @@ abstract class BaseKeyboard(
                     centerHorizontally()
                 })
             }
+            SleiPerformanceMetrics.reloadEnd("r:place", tAux)
         }
 
+        val tRest = SleiPerformanceMetrics.reloadStart()
         keyboardWaterRippleView?.setOccluders(
             keyRows.flatMap { row -> row.children.mapNotNull { it as? KeyView }.toList() }
         )
@@ -599,6 +632,8 @@ abstract class BaseKeyboard(
             "${javaClass.simpleName}.reloadLayout rows=${keyRows.size} " +
                 "duration=${SystemClock.elapsedRealtime() - startedAt}ms"
         )
+        SleiPerformanceMetrics.reloadEnd("r:rest", tRest)
+        SleiPerformanceMetrics.endReloadLayout()
     }
 
     fun updateAuxBarActions(actions: List<AuxBarAction>) {
@@ -1155,15 +1190,22 @@ abstract class BaseKeyboard(
         registerComposeAware: Boolean = true,
         appearanceOverride: KeyDef.Appearance? = null
     ): KeyView {
+        val tKey = SleiPerformanceMetrics.reloadKeyStart()
+        val tResolve = SleiPerformanceMetrics.reloadKeyStart()
         val (activeDef, resolvedAppearance) = resolveComposeActiveDef(def)
+        SleiPerformanceMetrics.reloadEnd("k:resolve", tResolve)
         val activeAppearance = appearanceOverride ?: resolvedAppearance
-        return when (activeAppearance) {
+        val tCtor = SleiPerformanceMetrics.reloadKeyStart()
+        val keyView: KeyView = when (activeAppearance) {
             is KeyDef.Appearance.AltText -> AltTextKeyView(context, theme, activeAppearance, horizontalGapScale)
             is KeyDef.Appearance.ImageAltText -> ImageAltTextKeyView(context, theme, activeAppearance, horizontalGapScale, def.iconSlot)
             is KeyDef.Appearance.ImageText -> ImageTextKeyView(context, theme, activeAppearance, horizontalGapScale, def.iconSlot)
             is KeyDef.Appearance.Text -> TextKeyView(context, theme, activeAppearance, horizontalGapScale)
             is KeyDef.Appearance.Image -> ImageKeyView(context, theme, activeAppearance, horizontalGapScale, def.iconSlot)
-        }.apply {
+        }
+        SleiPerformanceMetrics.reloadEnd("k:ctor", tCtor)
+        val tApply = SleiPerformanceMetrics.reloadKeyStart()
+        keyView.apply {
             setTextScale(currentTextScale)
             soundEffect = when (def) {
                 is SpaceKey -> InputFeedbacks.SoundEffect.SpaceBar
@@ -1284,6 +1326,9 @@ abstract class BaseKeyboard(
                 composeAwareKeys += ComposeAwareKey(def, this, baseline)
             }
         }
+        SleiPerformanceMetrics.reloadEnd("k:apply", tApply)
+        SleiPerformanceMetrics.reloadKeyEnd(tKey)
+        return keyView
     }
 
     open fun onCompositionStateChanged(composing: Boolean) {
