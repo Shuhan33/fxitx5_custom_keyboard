@@ -15,15 +15,28 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 object SleiPerformanceMetrics {
+    /** Where the InputView shown for a popup came from. */
+    private enum class ViewSource(val label: String, val shortLabel: String) {
+        COLD("现场构建", "现场"),
+        PREWARM("预热视图", "预热"),
+        REUSED("复用已有视图", "复用")
+    }
+
     private class PopupSample(
         val wallClockMs: Long,
         val durationMs: Long,
-        val usedPreparedViews: Boolean
+        val serviceOrdinal: Int,
+        val viewSource: ViewSource
     )
 
     private const val MAX_POPUP_HISTORY = 12
     private val popups = ArrayDeque<PopupSample>(MAX_POPUP_HISTORY)
     private val popupTotal = AtomicLong(0)
+    // Bumped by every InputView attach (see recordInputViewConstruct). A popup whose window
+    // shows with no attach since the previous popup reused the view attached before it.
+    // Accessed on the main thread only.
+    private var viewBuildSeq = 0
+    private var popupSeenBuildSeq = 0
 
     private val serviceCreateMs = AtomicLong(-1)
     // Service instance lifecycle breadcrumbs: system can destroy and recreate the
@@ -240,6 +253,7 @@ object SleiPerformanceMetrics {
     fun recordInputViewConstruct(durationMs: Long, usedPrepared: Boolean) {
         inputViewConstructMs.set(durationMs)
         lastConstructUsedPrepared = usedPrepared
+        viewBuildSeq++
     }
 
     fun recordInputViewAttach(durationMs: Long) {
@@ -282,23 +296,33 @@ object SleiPerformanceMetrics {
         lastThemeRebuildWallClock.set(System.currentTimeMillis())
     }
 
-    /** Service instance created (onCreate). */
-    fun markServiceCreate() {
-        serviceCreateCount.incrementAndGet()
-    }
+    /**
+     * Service instance created (onCreate). Returns this instance's 1-based ordinal within the
+     * process, so breadcrumbs and popup samples can tell the instances apart.
+     */
+    fun markServiceCreate(): Int = serviceCreateCount.incrementAndGet()
 
     /** Service instance destroyed by the system (onDestroy); process may survive. */
     fun markServiceDestroy() {
         lastServiceDestroyWallClock.set(System.currentTimeMillis())
     }
 
-    fun markWindowShown() {
+    /** Window shown for a popup, served by the service instance with [serviceOrdinal]. */
+    fun markWindowShown(serviceOrdinal: Int) {
+        // Origin of this popup's view: an attach since the last popup means the view was built
+        // then (prewarmed or cold); otherwise the view attached earlier is reused as is.
+        val source = when {
+            viewBuildSeq == popupSeenBuildSeq -> ViewSource.REUSED
+            lastConstructUsedPrepared -> ViewSource.PREWARM
+            else -> ViewSource.COLD
+        }
+        popupSeenBuildSeq = viewBuildSeq
         val start = inputRequestedAt.getAndSet(-1)
         if (start < 0) return
         val duration = (SystemClock.elapsedRealtime() - start).coerceAtLeast(0)
         inputRequestToWindowMs.set(duration)
         synchronized(popups) {
-            popups.addLast(PopupSample(System.currentTimeMillis(), duration, lastConstructUsedPrepared))
+            popups.addLast(PopupSample(System.currentTimeMillis(), duration, serviceOrdinal, source))
             while (popups.size > MAX_POPUP_HISTORY) popups.removeFirst()
         }
         popupTotal.incrementAndGet()
@@ -368,11 +392,15 @@ object SleiPerformanceMetrics {
                 popups.reversed().forEach { sample ->
                     append("${index--}) ").append(timestamp(sample.wallClockMs)).append("  ")
                         .append(sample.durationMs).append(" ms  ")
-                        .append(if (sample.usedPreparedViews) "复用预热视图" else "现场构建")
+                        .append("实例#").append(sample.serviceOrdinal).append("  ")
+                        .append(sample.viewSource.label)
                         .append('\n')
                 }
             }
         }
+        // Event trail (service/app/window/theme transitions) to attribute slow popups to a cause.
+        append("-- 生命周期记录（HH:mm:ss.SSS，老→新）--\n")
+        append(SleiLifecycleBreadcrumbs.snapshot()).append('\n')
     }
 
     private fun liveSummary(): String = buildString {
@@ -400,7 +428,7 @@ object SleiPerformanceMetrics {
             if (popups.isNotEmpty()) {
                 append("最近弹出样本：").append(
                     popups.reversed().take(5)
-                        .joinToString(", ") { "${it.durationMs}ms${if (it.usedPreparedViews) "(复用)" else "(现场)"}" }
+                        .joinToString(", ") { "${it.durationMs}ms(#${it.serviceOrdinal}·${it.viewSource.shortLabel})" }
                 ).append('\n')
             }
         }

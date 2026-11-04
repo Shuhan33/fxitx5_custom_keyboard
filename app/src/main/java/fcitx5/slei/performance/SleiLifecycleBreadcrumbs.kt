@@ -4,6 +4,9 @@
  */
 package fcitx5.slei.performance
 
+import android.os.Build
+import android.os.Process
+import android.os.SystemClock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -16,9 +19,12 @@ import java.time.format.DateTimeFormatter
  * records one line here, and [FcitxApplication.persistCrashReport] appends the
  * snapshot to every saved crash report, so the reproducible scenario is
  * captured without relying on the user's memory of exact steps.
+ *
+ * The same trail is appended to the performance report, so the capacity must
+ * cover several popups' worth of events (each popup logs ~5 lines).
  */
 object SleiLifecycleBreadcrumbs {
-    private const val MAX_ENTRIES = 80
+    private const val MAX_ENTRIES = 256
     private val entries = ArrayDeque<String>(MAX_ENTRIES)
     private val lock = Any()
     private val timeFormatter =
@@ -33,6 +39,20 @@ object SleiLifecycleBreadcrumbs {
                 while (entries.size > MAX_ENTRIES) entries.removeFirst()
             }
         } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Milliseconds since this process was started, or -1 when unavailable (API < 24).
+     * A small value on a service create/popup means the process itself was just cold-started.
+     * Reads a cached static value, so it is safe on the main thread.
+     */
+    fun processUptimeMs(): Long {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return -1L
+        return try {
+            SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()
+        } catch (_: Throwable) {
+            -1L
         }
     }
 

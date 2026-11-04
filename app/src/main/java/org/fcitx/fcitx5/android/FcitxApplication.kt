@@ -140,6 +140,10 @@ class FcitxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // First breadcrumb of the process: a small procUptime here means the process itself was cold-started.
+        SleiLifecycleBreadcrumbs.mark(
+            "process start pid=${Process.myPid()} procUptime=${SleiLifecycleBreadcrumbs.processUptimeMs()}ms"
+        )
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("zh-CN"))
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !userManager.isUserUnlocked) {
@@ -260,6 +264,7 @@ class FcitxApplication : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        SleiLifecycleBreadcrumbs.mark("onTrimMemory level=$level")
         ClipboardAdapter.trimMemory(level)
         // Never release the font caches on trims. Real fontset changes are pushed by
         // ConfigProviders' file watcher, so a trim can never leave the caches stale;
@@ -270,6 +275,7 @@ class FcitxApplication : Application() {
 
     override fun onLowMemory() {
         super.onLowMemory()
+        SleiLifecycleBreadcrumbs.mark("onLowMemory")
         ClipboardAdapter.trimMemory(Int.MAX_VALUE)
         FontProviders.trimMemory()
     }

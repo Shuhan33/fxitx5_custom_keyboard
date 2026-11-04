@@ -170,6 +170,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     )
     private var preparedViews: PreparedViews? = null
     private val prewarmInputViewsRunnable = Runnable(::prewarmInputViews)
+    // 1-based ordinal of this service instance within the process (see SleiPerformanceMetrics).
+    private var serviceOrdinal = 0
 
     private val navbarMgr = NavigationBarManager()
     internal val inputDeviceManager = InputDeviceManager(
@@ -344,7 +346,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
     }
 
-    private fun replaceInputView(theme: Theme, prepared: InputView? = null): InputView {
+    /** [reason] names the caller in the lifecycle breadcrumbs (onCreateInputView, theme-apply, pref-recreate). */
+    private fun replaceInputView(theme: Theme, prepared: InputView? = null, reason: String): InputView {
         val startedAt = SystemClock.elapsedRealtime()
         val constructStart = SystemClock.elapsedRealtime()
         val newInputView = prepared ?: run {
@@ -353,17 +356,21 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             SleiPerformanceMetrics.beginBuild()
             InputView(this, fcitx, theme)
         }
-        SleiPerformanceMetrics.recordInputViewConstruct(
-            SystemClock.elapsedRealtime() - constructStart,
-            usedPrepared = prepared != null
-        )
+        val constructMs = SystemClock.elapsedRealtime() - constructStart
+        SleiPerformanceMetrics.recordInputViewConstruct(constructMs, usedPrepared = prepared != null)
         val attachStart = SystemClock.elapsedRealtime()
         setInputView(newInputView)
         inputDeviceManager.setInputView(newInputView)
         inputView = newInputView
         inputViewTheme = theme
-        SleiPerformanceMetrics.recordInputViewAttach(SystemClock.elapsedRealtime() - attachStart)
-        SleiPerformanceMetrics.recordReplaceInputView(SystemClock.elapsedRealtime() - startedAt)
+        val attachMs = SystemClock.elapsedRealtime() - attachStart
+        SleiPerformanceMetrics.recordInputViewAttach(attachMs)
+        val totalMs = SystemClock.elapsedRealtime() - startedAt
+        SleiPerformanceMetrics.recordReplaceInputView(totalMs)
+        SleiLifecycleBreadcrumbs.mark(
+            "replaceInputView reason=$reason prewarmed=${prepared != null} " +
+                "construct=${constructMs}ms attach=${attachMs}ms total=${totalMs}ms"
+        )
         android.util.Log.i(
             "FcitxColdStart",
             "replaceInputView total=${SystemClock.elapsedRealtime() - startedAt}ms " +
@@ -386,7 +393,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         return newCandidatesView
     }
 
-    private fun replaceInputViews(theme: Theme) {
+    private fun replaceInputViews(theme: Theme, reason: String) {
         val cached = preparedViews
         val prepared = cached?.takeIf { it.theme === theme }
         if (cached != null && prepared == null) {
@@ -396,13 +403,22 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         window.window?.let {
             navbarMgr.evaluate(it, inputDeviceManager.isVirtualKeyboard)
         }
-        replaceInputView(theme, prepared?.inputView)
+        replaceInputView(theme, prepared?.inputView, reason)
         replaceCandidateView(theme, prepared?.candidatesView)
     }
 
     private fun prewarmInputViews() {
-        if (preparedViews != null || inputView != null || candidatesView != null) return
+        if (preparedViews != null || inputView != null || candidatesView != null) {
+            val skipReason = when {
+                preparedViews != null -> "prepared-present"
+                inputView != null -> "input-view-present"
+                else -> "candidates-present"
+            }
+            SleiLifecycleBreadcrumbs.mark("prewarm skip reason=$skipReason")
+            return
+        }
         val theme = ThemeManager.activeTheme
+        SleiLifecycleBreadcrumbs.mark("prewarm start")
         val startedAt = SystemClock.elapsedRealtime()
         SleiPerformanceMetrics.beginBuild()
         val input = InputView(this, fcitx, theme)
@@ -415,6 +431,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         preparedViews = PreparedViews(theme, input, candidates)
         val duration = SystemClock.elapsedRealtime() - startedAt
         SleiPerformanceMetrics.recordViewPrewarm(duration)
+        SleiLifecycleBreadcrumbs.mark("prewarm end dur=${duration}ms")
         android.util.Log.i("FcitxColdStart", "idle view prewarm duration=${duration}ms")
     }
 
@@ -454,14 +471,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
             SleiLifecycleBreadcrumbs.mark("theme-apply name=${theme.name} isDark=${theme.isDark}")
             SleiPerformanceMetrics.markThemeRebuild()
-            replaceInputViews(theme)
+            replaceInputViews(theme, "theme-apply")
             inputView?.syncImeFromCache()
         }
     }
 
     @Keep
     private val recreateInputViewListener = ManagedPreference.OnChangeListener<Any> { _, _ ->
-        replaceInputView(ThemeManager.activeTheme)
+        replaceInputView(ThemeManager.activeTheme, reason = "pref-recreate")
     }
 
     @Keep
@@ -574,8 +591,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onCreate() {
         val startedAt = SystemClock.elapsedRealtime()
         android.util.Log.i("FcitxColdStart", "service.onCreate begin")
-        SleiLifecycleBreadcrumbs.mark("service onCreate")
-        SleiPerformanceMetrics.markServiceCreate()
+        serviceOrdinal = SleiPerformanceMetrics.markServiceCreate()
+        SleiLifecycleBreadcrumbs.mark(
+            "service onCreate #$serviceOrdinal procUptime=${SleiLifecycleBreadcrumbs.processUptimeMs()}ms"
+        )
         fcitx = FcitxDaemon.connect(javaClass.name)
         lifecycleScope.launch {
             jobs.consumeEach { it.join() }
@@ -1105,7 +1124,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         super.onWindowShown()
         val shownStart = SystemClock.elapsedRealtime()
         SleiLifecycleBreadcrumbs.mark("onWindowShown")
-        SleiPerformanceMetrics.markWindowShown()
+        SleiPerformanceMetrics.markWindowShown(serviceOrdinal)
         highlightColor =
             styledColorOrDefault(android.R.attr.colorAccent, DefaultHighlightColor).alpha(0.4f)
         // cross-process Settings reads; must not run on the popup critical path
@@ -1126,9 +1145,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     override fun onCreateInputView(): View? {
         val startedAt = SystemClock.elapsedRealtime()
         android.util.Log.i("FcitxColdStart", "service.onCreateInputView begin")
-        replaceInputViews(ThemeManager.activeTheme)
+        SleiLifecycleBreadcrumbs.mark("onCreateInputView begin")
+        replaceInputViews(ThemeManager.activeTheme, "onCreateInputView")
         val duration = SystemClock.elapsedRealtime() - startedAt
         SleiPerformanceMetrics.recordInputViewCreate(duration)
+        SleiLifecycleBreadcrumbs.mark("onCreateInputView end dur=${duration}ms")
         android.util.Log.i(
             "FcitxColdStart",
             "service.onCreateInputView duration=${duration}ms"
@@ -1653,7 +1674,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val prepStartedAt = SystemClock.elapsedRealtime()
         isInInputLifecycleCriticalPhase = true
         SleiLifecycleBreadcrumbs.mark(
-            "onStartInputView restarting=$restarting pkg=${info.packageName ?: "?"}"
+            "onStartInputView restarting=$restarting pkg=${info.packageName ?: "?"} " +
+                "inputType=0x${Integer.toHexString(info.inputType)}"
         )
         try {
             // A newly shown soft keyboard is a fresh casing session. Clear both the
@@ -2057,7 +2079,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun onDestroy() {
-        SleiLifecycleBreadcrumbs.mark("service onDestroy")
+        SleiLifecycleBreadcrumbs.mark("service onDestroy #$serviceOrdinal")
         SleiPerformanceMetrics.markServiceDestroy()
         MainService.stopSyncService(this)
         if (this::contentView.isInitialized) {
