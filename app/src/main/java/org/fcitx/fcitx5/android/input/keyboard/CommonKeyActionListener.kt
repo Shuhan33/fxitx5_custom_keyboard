@@ -236,7 +236,6 @@ class CommonKeyActionListener :
                                     val enabled = enabledIme()
                                     val current = currentIme().uniqueName
                                     val japaneseNext = JapaneseInputComponent.isEnabledInCycle() &&
-                                        enabled.isNotEmpty() &&
                                         current == JapaneseInputComponent.anchorOf(enabled)
                                     when {
                                         // insert the Japanese step after the anchor (keyboard-us)

@@ -3508,7 +3508,7 @@ class InputView(
     internal fun dispatchLanguageSwitch() {
         commonKeyActionListener.listener.onKeyAction(
             KeyAction.LangSwitchAction,
-            org.fcitx.fcitx5.android.input.keyboard.KeyActionListener.Source.Keyboard
+            KeyActionListener.Source.Keyboard
         )
     }
 
@@ -3543,6 +3543,9 @@ class InputView(
         ConfigProviders.removeIconChangeListener(onIconChangeListener)
         blurUpdateJob?.cancel()
         blurUpdateScope.cancel()
+        // A view replaced while Japanese is active (e.g. theme change) must not leave the
+        // service pointing at this view's composer, which would keep ignoring fcitx preedit.
+        japaneseInput.finishSession()
         // clear DynamicScope, implies that InputView should not be attached again after detached.
         scope.clear()
     }

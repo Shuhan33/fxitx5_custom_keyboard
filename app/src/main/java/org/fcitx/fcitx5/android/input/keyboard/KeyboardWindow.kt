@@ -197,7 +197,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
 
     private val keyActionListener = KeyActionListener { it, source ->
         // The Japanese keyboard's keys are handled by the Kotlin composer and never reach fcitx.
-        if (currentKeyboardName == JapaneseKeyboard.Name && japaneseInput.onKeyAction(it, source)) {
+        if (currentKeyboardName == JapaneseKeyboard.Name && japaneseInput.onKeyAction(it)) {
             return@KeyActionListener
         }
         when (it) {

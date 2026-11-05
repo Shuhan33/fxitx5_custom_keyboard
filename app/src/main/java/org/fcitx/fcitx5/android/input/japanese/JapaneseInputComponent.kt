@@ -23,7 +23,6 @@ import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.keyboard.JapaneseKeyboard
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction
-import org.fcitx.fcitx5.android.input.keyboard.KeyActionListener
 import org.fcitx.fcitx5.android.input.keyboard.KeyboardWindow
 import org.fcitx.fcitx5.android.input.keyboard.TextKeyboard
 import org.fcitx.fcitx5.android.input.preedit.PreeditComponent
@@ -73,8 +72,6 @@ class JapaneseInputComponent :
     /** fcitx input method that stays active underneath the Japanese keyboard. */
     private var anchorIme: String? = null
 
-    val isComposing: Boolean get() = isActive && !composer.isEmpty
-
     private val keyboardWindow: KeyboardWindow?
         get() = windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow
 
@@ -87,6 +84,10 @@ class JapaneseInputComponent :
         anchorIme = anchor
         composer.clear()
         candidates = emptyList()
+        // Keep whatever the engine underneath was composing (e.g. an English word with spell
+        // hints) in the editor as-is, like other non-Chinese commits; otherwise the first
+        // refreshUi() below would replace it with the empty Japanese composition.
+        service.finishComposing()
         service.localComposer = this
         preedit.setUndoIndicatorEnabled(false)
         // Drop anything the engine underneath still shows (e.g. prediction); its events are
@@ -123,12 +124,11 @@ class JapaneseInputComponent :
 
     /**
      * Called before the keyboard is (re)started for an editor. Normally [finishSession] already
-     * left Japanese mode; this is a safety net that never commits into the new editor.
+     * left Japanese mode; this is a safety net that never writes into the new editor (the
+     * service already reset its composing state in onStartInput).
      */
     fun onNewInputSession() {
         if (!isActive) return
-        composer.clear()
-        service.updateLocalComposingText("")
         deactivate()
         restoreChineseInputMethod()
     }
@@ -181,7 +181,7 @@ class JapaneseInputComponent :
      * Handle an action from the Japanese keyboard. Returns true when consumed; otherwise the
      * caller continues with the normal handling (after any composition was committed here).
      */
-    fun onKeyAction(action: KeyAction, @Suppress("UNUSED_PARAMETER") source: KeyActionListener.Source): Boolean {
+    fun onKeyAction(action: KeyAction): Boolean {
         if (!isActive) return false
         when (action) {
             is KeyAction.FcitxKeyAction -> {
