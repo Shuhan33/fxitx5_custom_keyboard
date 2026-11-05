@@ -292,6 +292,8 @@
     <string name="show_lang_switch_key">显示语言切换键</string>
     <string name="english_spell_candidates">英文联想</string>
     <string name="english_spell_candidates_summary">拼音输入时在候选栏显示英文单词和建议</string>
+    <string name="japanese_keyboard_in_cycle">语言键切换包含日语键盘</string>
+    <string name="japanese_keyboard_in_cycle_summary">按语言键依次切换 中文 → 英文 → 日语（罗马字输入假名）</string>
     <string name="horizontal_candidate_style">横向候选词样式</string>
     <string name="horizontal_candidate_never_fill">从不填充宽度</string>
     <string name="horizontal_candidate_auto_fill">按需填充宽度</string>

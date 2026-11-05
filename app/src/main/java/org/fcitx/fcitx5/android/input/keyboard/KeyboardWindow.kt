@@ -29,6 +29,7 @@ import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dependency.theme
+import org.fcitx.fcitx5.android.input.japanese.JapaneseInputComponent
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.PopupActionListener
 import org.fcitx.fcitx5.android.input.popup.PopupComponent
@@ -52,6 +53,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     private val popup: PopupComponent by manager.must()
     private val bar: KawaiiBarComponent by manager.must()
     private val returnKeyDrawable: ReturnKeyDrawableComponent by manager.must()
+    private val japaneseInput: JapaneseInputComponent by manager.must()
 
     private val iconThemeListener = IconThemeManager.OnIconThemeChangeListener {
         returnKeyDrawable.onIconThemeChanged()
@@ -99,7 +101,7 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
             when (name) {
                 TextKeyboard.Name -> TextKeyboard(context, theme)
                 NumberKeyboard.Name -> NumberKeyboard(context, theme)
-                JapaneseKanaKeyboard.Name -> JapaneseKanaKeyboard(context, theme)
+                JapaneseKeyboard.Name -> JapaneseKeyboard(context, theme)
                 else -> null
             }
         }
@@ -138,7 +140,9 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     }
 
     fun usesCompanionKeyboardHeightOverride(): Boolean {
-        return currentKeyboardName != TextKeyboard.Name
+        // The Japanese keyboard is a main keyboard: same height source as TextKeyboard.
+        return currentKeyboardName != TextKeyboard.Name &&
+            currentKeyboardName != JapaneseKeyboard.Name
     }
 
     private fun updateCompositionState() {
@@ -192,6 +196,10 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     }
 
     private val keyActionListener = KeyActionListener { it, source ->
+        // The Japanese keyboard's keys are handled by the Kotlin composer and never reach fcitx.
+        if (currentKeyboardName == JapaneseKeyboard.Name && japaneseInput.onKeyAction(it, source)) {
+            return@KeyActionListener
+        }
         when (it) {
             is KeyAction.LayoutSwitchAction -> switchLayout(it.act, fromUserKey = true)
             is KeyAction.LayerSwitchAction -> handleLayerSwitchAction(it)
@@ -265,6 +273,10 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
     ) {
         val requestedTarget = to.ifEmpty { lastSymbolType }
         var target = requestedTarget
+        // While Japanese is the active main keyboard, every "back to the main keyboard" request
+        // (number keyboard, symbol picker, clipboard return, ...) targets it instead of the text
+        // keyboard. A numeric-layout override below still renders through TextKeyboard.
+        val returnToJapanese = requestedTarget == TextKeyboard.Name && japaneseInput.isActive
         // The built-in NumberKeyboard is short-circuited by the configured numeric layout
         // no matter how it is reached: a numeric editor via onStartInput, a manual
         // LayoutSwitchKey, the symbol picker numpad button, or a preset/macro key targeting
@@ -297,12 +309,17 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
         // onStartInput) must NOT release the manual numeric layout here: the layer latch
         // was applied moments before via applyEffectiveTextLayer and releasing would
         // clobber it back to the session fallback.
+        if (returnToJapanese) {
+            target = JapaneseKeyboard.Name
+        }
         val isBuiltinKeyboard = target == TextKeyboard.Name ||
             target == NumberKeyboard.Name ||
-            target == JapaneseKanaKeyboard.Name
+            target == JapaneseKeyboard.Name
         val apply = apply@{
             if (isBuiltinKeyboard) {
-                if (target == TextKeyboard.Name || target == NumberKeyboard.Name) {
+                if (target == TextKeyboard.Name || target == NumberKeyboard.Name ||
+                    target == JapaneseKeyboard.Name
+                ) {
                     clearCompanionKeyboardHeightOverride()
                 } else if (inheritTextHeight) {
                     prepareCompanionKeyboardHeightPercentOverride()
@@ -316,7 +333,9 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
                 // keyboard by the numeric layout override. Remember the requested target so
                 // the "?123" key still returns to the same (overridden) number keyboard.
                 val rememberTarget = if (target == TextKeyboard.Name) requestedTarget else target
-                if (remember && rememberTarget != TextKeyboard.Name) {
+                if (remember && rememberTarget != TextKeyboard.Name &&
+                    rememberTarget != JapaneseKeyboard.Name
+                ) {
                     lastSymbolType = rememberTarget
                 }
                 if (target == currentKeyboardName) {
@@ -575,6 +594,9 @@ class KeyboardWindow : InputWindow.SimpleInputWindow<KeyboardWindow>(), Essentia
 
     override fun onDetached() {
         IconThemeManager.removeOnChangedListener(iconThemeListener)
+        // e.g. clipboard/emoji opened from the toolbar: do not leave a Japanese composition in
+        // the editor where another window's commit would replace it.
+        japaneseInput.commitComposition()
         currentKeyboard?.let {
             it.onDetach()
             it.keyActionListener = null

@@ -142,7 +142,6 @@ object UserConfigFiles {
             injectEmojiToolbarButtonIfMissing()
             patchPinyinEngineDefaults()
             mergeCommonPronunciationAliases()
-            mergeKanaPopupPreset()
             seedDefaultImProfile()
             revFile.writeText(SLEI_CUSTOM_REV.toString())
         }
@@ -273,27 +272,6 @@ object UserConfigFiles {
             append(withoutOldValue)
             if (withoutOldValue.isNotEmpty() && !withoutOldValue.endsWith('\n')) append('\n')
         }
-    }
-
-    private fun mergeKanaPopupPreset() {
-        val file = popupPresetJson() ?: return
-        if (!file.exists()) return
-        val original = file.readText()
-        if (original.contains("\"あ\"")) return
-        val kana = """
-  ,"あ": ["い", "う", "え", "お", "ぁ"],
-  "か": ["き", "く", "け", "こ", "が"],
-  "さ": ["し", "す", "せ", "そ", "ざ"],
-  "た": ["ち", "つ", "て", "と", "だ"],
-  "な": ["に", "ぬ", "ね", "の"],
-  "は": ["ひ", "ふ", "へ", "ほ", "ば", "ぱ"],
-  "ま": ["み", "む", "め", "も"],
-  "や": ["ゆ", "よ", "ゃ", "ゅ", "ょ"],
-  "ら": ["り", "る", "れ", "ろ"],
-  "わ": ["を", "ん", "ー", "っ", "ゎ"]
-""".trimIndent()
-        val updated = original.replace(Regex("""\}\s*$"""), "$kana\n}")
-        if (updated != original) file.writeText(updated)
     }
 
     private fun seedDefaultImProfile() {

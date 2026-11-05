@@ -264,6 +264,12 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             true,
             R.string.english_spell_candidates_summary
         )
+        val japaneseKeyboardInCycle = switch(
+            R.string.japanese_keyboard_in_cycle,
+            "japanese_keyboard_in_cycle",
+            true,
+            R.string.japanese_keyboard_in_cycle_summary
+        )
         val textKeyboardLayoutProfile = ManagedPreference.PString(
             sharedPreferences,
             "text_keyboard_layout_profile",

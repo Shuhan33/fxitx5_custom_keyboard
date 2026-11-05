@@ -93,6 +93,9 @@ open class PreeditUi(
     var visible = false
         private set
 
+    /** Hide the selection-undo indicator (e.g. for the Japanese composer, which has none). */
+    var undoIndicatorEnabled = true
+
     val actualContentWidth: Int
         get() {
             if (!visible || root.visibility != View.VISIBLE) return 0
@@ -147,7 +150,7 @@ open class PreeditUi(
             }
         }
         val indicatorPosition = inputPanel.auxUp.length + selectedPrefixLength
-        val showUndo = onUndoSelection != null && selectedPrefixLength > 0
+        val showUndo = onUndoSelection != null && undoIndicatorEnabled && selectedPrefixLength > 0
         val upString = if (showUndo) buildSpannedString {
             append(baseUpString, 0, indicatorPosition)
             val start = length

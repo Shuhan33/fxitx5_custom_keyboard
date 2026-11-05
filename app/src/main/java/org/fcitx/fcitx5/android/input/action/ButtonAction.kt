@@ -346,6 +346,12 @@ data object LanguageSwitchAction : ButtonAction() {
         val behavior = AppPrefs.getInstance().keyboard.langSwitchKeyBehavior.getValue()
         when (behavior) {
             LangSwitchBehavior.Enumerate -> {
+                // Route through the keyboard's language key handling so the Japanese step
+                // of the cycle behaves the same from the toolbar.
+                service.inputView?.let {
+                    it.dispatchLanguageSwitch()
+                    return
+                }
                 fcitx.launchOnReady { f ->
                     if (f.enabledIme().size < 2) {
                         service.lifecycleScope.launch {

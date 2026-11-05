@@ -23,6 +23,7 @@ import org.fcitx.fcitx5.android.input.dependency.fcitx
 import org.fcitx.fcitx5.android.input.dependency.inputMethodService
 import org.fcitx.fcitx5.android.input.dialog.AddMoreInputMethodsPrompt
 import org.fcitx.fcitx5.android.input.dialog.InputMethodPickerDialog
+import org.fcitx.fcitx5.android.input.japanese.JapaneseInputComponent
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener.BackspaceSwipeState.Reset
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener.BackspaceSwipeState.Selection
 import org.fcitx.fcitx5.android.input.keyboard.CommonKeyActionListener.BackspaceSwipeState.Stopped
@@ -63,6 +64,7 @@ class CommonKeyActionListener :
     private val preeditState: PreeditEmptyStateComponent by manager.must()
     private val horizontalCandidate: HorizontalCandidateComponent by manager.must()
     private val windowManager: InputWindowManager by manager.must()
+    private val japaneseInput: JapaneseInputComponent by manager.must()
 
     private var lastPickerType by AppPrefs.getInstance().internal.lastPickerType
 
@@ -226,13 +228,26 @@ class CommonKeyActionListener :
                 is LangSwitchAction -> {
                     when (langSwitchKeyBehavior) {
                         LangSwitchBehavior.Enumerate -> {
-                            service.postFcitxJob {
-                                if (enabledIme().size < 2) {
-                                    service.lifecycleScope.launch {
-                                        service.showDialog(AddMoreInputMethodsPrompt.build(context))
+                            if (japaneseInput.isActive) {
+                                // 日本語 -> continue the fcitx cycle after the anchor input method
+                                japaneseInput.leaveToNextInputMethod()
+                            } else {
+                                service.postFcitxJob {
+                                    val enabled = enabledIme()
+                                    val current = currentIme().uniqueName
+                                    val japaneseNext = JapaneseInputComponent.isEnabledInCycle() &&
+                                        enabled.isNotEmpty() &&
+                                        current == JapaneseInputComponent.anchorOf(enabled)
+                                    when {
+                                        // insert the Japanese step after the anchor (keyboard-us)
+                                        japaneseNext -> service.lifecycleScope.launch {
+                                            japaneseInput.enter(current)
+                                        }
+                                        enabled.size < 2 -> service.lifecycleScope.launch {
+                                            service.showDialog(AddMoreInputMethodsPrompt.build(context))
+                                        }
+                                        else -> enumerateIme()
                                     }
-                                } else {
-                                    enumerateIme()
                                 }
                             }
                         }

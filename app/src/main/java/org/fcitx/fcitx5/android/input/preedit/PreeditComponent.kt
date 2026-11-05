@@ -56,6 +56,10 @@ class PreeditComponent : UniqueComponent<PreeditComponent>(), Dependent, InputBr
         }
     }
 
+    fun setUndoIndicatorEnabled(enabled: Boolean) {
+        ui.undoIndicatorEnabled = enabled
+    }
+
     override fun onInputPanelUpdate(data: FcitxEvent.InputPanelEvent.Data) {
         ui.update(data)
         // Only show if shouldDisplay is true

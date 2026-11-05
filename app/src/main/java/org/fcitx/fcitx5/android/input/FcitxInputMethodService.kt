@@ -295,6 +295,40 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         composingText = FormattedText.Empty
     }
 
+    /**
+     * A Kotlin-side composer (the Japanese romaji keyboard) that owns the composing text
+     * while [isActive]. fcitx client preedit is then ignored, and the composer is told when
+     * the service finishes its composition behind its back.
+     */
+    interface LocalComposer {
+        val isActive: Boolean
+
+        /** The composing text was finished as-is (cursor moved away); drop local state. */
+        fun onComposingFinishedExternally()
+
+        /** The input session or view is ending: commit pending text and leave the mode. */
+        fun finishSession()
+    }
+
+    var localComposer: LocalComposer? = null
+
+    private val localComposerActive: Boolean
+        get() = localComposer?.isActive == true
+
+    /**
+     * Show [text] as the editor's composing text on behalf of [localComposer], keeping the
+     * service's composing/selection prediction in sync. Empty text clears it.
+     */
+    fun updateLocalComposingText(text: String) {
+        if (!capabilityFlags.has(CapabilityFlag.Preedit)) return
+        val formatted = if (text.isEmpty()) {
+            FormattedText.Empty
+        } else {
+            FormattedText(arrayOf(text), intArrayOf(TextFormatFlag.Underline.flag), text.length)
+        }
+        updateComposingText(formatted)
+    }
+
     private fun updateStatusIcon(entry: InputMethodEntry = fcitx.runImmediately { inputMethodEntryCached }) {
         if (inputDeviceManager.isVirtualKeyboard) {
             hideStatusIcon()
@@ -728,7 +762,11 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                 }
             }
             is FcitxEvent.ClientPreeditEvent -> {
-                updateComposingText(event.data)
+                // The local composer owns the composing text; a (usually empty) fcitx client
+                // preedit must not clear it.
+                if (!localComposerActive) {
+                    updateComposingText(event.data)
+                }
             }
             is FcitxEvent.DeleteSurroundingEvent -> {
                 val (before, after) = event.data
@@ -1864,6 +1902,15 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
             return
         }
+        if (localComposerActive) {
+            // The local composer has no movable cursor: keep composing while the cursor stays
+            // at the end, otherwise finish the composing text as-is, like fcitx does below.
+            if (newSelStart == composing.end) return
+            resetComposingState()
+            currentInputConnection?.finishComposingText()
+            localComposer?.onComposingFinishedExternally()
+            return
+        }
         // check if cursor inside composing text
         if (composing.contains(newSelStart)) {
             if (ignoreSystemCursor) return
@@ -2035,6 +2082,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
         decorLocationUpdated = false
         inputView?.cancelOngoingKeyActions()
+        // Commit a pending Japanese composition while the old input connection is still valid
+        // and leave Japanese mode, so the next shown keyboard starts from Chinese.
+        localComposer?.finishSession()
         InputStatsManager.flush()
         inputDeviceManager.onFinishInputView()
         currentInputConnection?.apply {
@@ -2055,6 +2105,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         SleiLifecycleBreadcrumbs.mark("onFinishInput")
         MainService.stopSyncService(this)
         inputView?.cancelOngoingKeyActions()
+        localComposer?.finishSession()
         InputStatsManager.flush()
         val inputSessionGeneration = this.inputSessionGeneration
         postFcitxSessionJob(inputSessionGeneration) {

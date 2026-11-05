@@ -437,10 +437,11 @@ class SpaceKey(
     backgroundColor: Int? = null,
     backgroundColorMonet: String? = null,
     shadowColor: Int? = null,
-    shadowColorMonet: String? = null
+    shadowColorMonet: String? = null,
+    displayText: String = " "
 ) : KeyDef(
     Appearance.Text(
-        displayText = " ",
+        displayText = displayText,
         textSize = 13f,
         percentWidth = percentWidth,
         border = Border.Special,

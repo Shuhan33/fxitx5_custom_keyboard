@@ -75,11 +75,18 @@ class HorizontalCandidateComponent :
     private var prefetchExhaustedForSnapshot = false
     private var localSuggestionSuffixes: List<String>? = null
 
+    /**
+     * Selection handler for candidates supplied by a Kotlin-side composer (e.g. the Japanese
+     * romaji keyboard). While set, the strip shows those candidates instead of fcitx data.
+     */
+    private var localCandidateSelect: ((Int) -> Unit)? = null
+
     override fun onStartInput(info: EditorInfo, capFlags: CapabilityFlags) {
         // A new editor must never inherit candidates or local suggestions from the previous one.
         pendingLegacyCandidateUpdate?.let(view::removeCallbacks)
         pendingLegacyCandidateUpdate = null
         localSuggestionSuffixes = null
+        localCandidateSelect = null
         pagedCandidateFlowActive = false
         lastPagedEventUptimeMs = 0L
         lastPagedData = null
@@ -112,7 +119,9 @@ class HorizontalCandidateComponent :
 
     private fun refreshExpanded() {
         val loaded = adapter.candidates.size
-        val empty = loaded == 0
+        // Local (Kotlin composer) candidates are complete in the strip; fcitx has no expanded
+        // list for them, so the expand affordance stays hidden.
+        val empty = loaded == 0 || localCandidateSelect != null
         // Expanded candidates are a complete view, not a continuation after the
         // horizontal strip. Offset 0 includes the first ten candidates there.
         val expandedOffset = if (empty) EmptyExpandedOffset else 0
@@ -141,7 +150,7 @@ class HorizontalCandidateComponent :
     }
 
     private fun prefetchMoreCandidates(current: Array<CandidateWord>, total: Int) {
-        if (localSuggestionSuffixes != null) return
+        if (localSuggestionSuffixes != null || localCandidateSelect != null) return
         // PagedCandidateEvent indices are relative to the current engine page.
         // Replacing a short later page with global candidates 0..9 makes the
         // displayed word differ from the word selected by the same index.
@@ -176,6 +185,10 @@ class HorizontalCandidateComponent :
                 holder.itemView.minimumWidth = layoutMinWidth
                 holder.itemView.setOnClickListener {
                     val currentPosition = holder.bindingAdapterPosition
+                    localCandidateSelect?.let { select ->
+                        if (currentPosition >= 0) select(currentPosition)
+                        return@setOnClickListener
+                    }
                     localSuggestionSuffixes?.getOrNull(currentPosition)?.let { suffix ->
                         inputView.service.commitText(suffix)
                         dismissLocalSuggestions()
@@ -189,7 +202,9 @@ class HorizontalCandidateComponent :
                     fcitx.launchOnReady { it.select(idx) }
                 }
                 holder.itemView.setOnLongClickListener {
-                    if (localSuggestionSuffixes != null) return@setOnLongClickListener false
+                    if (localSuggestionSuffixes != null || localCandidateSelect != null) {
+                        return@setOnLongClickListener false
+                    }
                     inputView.showCandidateActionMenu(holder.idx, holder.candidate.text, holder.ui.root)
                     true
                 }
@@ -262,6 +277,7 @@ class HorizontalCandidateComponent :
 
     override fun onCandidateUpdate(data: FcitxEvent.CandidateListEvent.Data) {
         localSuggestionSuffixes = null
+        localCandidateSelect = null
         if (pagedCandidateFlowActive && data.total == -1) {
             val now = SystemClock.uptimeMillis()
             // Keep preferring paged events only when they are still arriving.
@@ -291,6 +307,7 @@ class HorizontalCandidateComponent :
 
     override fun onPagedCandidateUpdate(data: PagedCandidateEvent.Data) {
         localSuggestionSuffixes = null
+        localCandidateSelect = null
         pagedCandidateFlowActive = true
         lastPagedEventUptimeMs = SystemClock.uptimeMillis()
         pendingLegacyCandidateUpdate?.let(view::removeCallbacks)
@@ -375,7 +392,7 @@ class HorizontalCandidateComponent :
             }
             refreshExpanded()
         }
-        if (localSuggestionSuffixes == null) {
+        if (localSuggestionSuffixes == null && localCandidateSelect == null) {
             prefetchMoreCandidates(candidates, total)
         }
         // not sure why empty candidates won't trigger layout completion
@@ -422,4 +439,30 @@ class HorizontalCandidateComponent :
     }
 
     fun hasLocalSuggestions(): Boolean = localSuggestionSuffixes != null
+
+    /** Show candidates produced by a Kotlin-side composer; [onSelect] receives the index. */
+    fun showLocalCandidates(texts: List<String>, onSelect: (Int) -> Unit) {
+        localSuggestionSuffixes = null
+        if (texts.isEmpty()) {
+            clearLocalCandidates()
+            return
+        }
+        localCandidateSelect = onSelect
+        val words = texts.map { CandidateWord("", it, "", false) }.toTypedArray()
+        updateCandidates(words, words.size, -1)
+        bar.onCandidateUpdate(FcitxEvent.CandidateListEvent.Data(words.size, words))
+    }
+
+    /**
+     * Empty the strip and drop any local candidates. Also used when the Japanese keyboard
+     * takes over, so stale fcitx predictions are not left on screen.
+     */
+    fun clearLocalCandidates() {
+        val hadLocal = localCandidateSelect != null || localSuggestionSuffixes != null
+        localCandidateSelect = null
+        localSuggestionSuffixes = null
+        if (!hadLocal && adapter.itemCount == 0) return
+        updateCandidates(emptyArray(), 0, -1)
+        bar.onCandidateUpdate(FcitxEvent.CandidateListEvent.Data(0, emptyArray()))
+    }
 }

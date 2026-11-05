@@ -81,6 +81,7 @@ import org.fcitx.fcitx5.android.input.popup.PopupComponent
 import org.fcitx.fcitx5.android.input.font.FontProviders
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.preedit.PreeditComponent
+import org.fcitx.fcitx5.android.input.japanese.JapaneseInputComponent
 import org.fcitx.fcitx5.android.input.status.ButtonsAdjustingWindow
 import org.fcitx.fcitx5.android.input.status.StatusAreaWindow
 import android.view.MotionEvent
@@ -1505,6 +1506,7 @@ class InputView(
         (auxBarContainer.layoutParams as android.widget.FrameLayout.LayoutParams).gravity = Gravity.BOTTOM
     } }
     private val commonKeyActionListener = CommonKeyActionListener()
+    private val japaneseInput = JapaneseInputComponent()
     private var resourcesDisposed = false
     private val windowManager = InputWindowManager()
     private val kawaiiBar = SleiPerformanceMetrics.timeBuild("kawaiiBar") { KawaiiBarComponent() }
@@ -1533,6 +1535,7 @@ class InputView(
         scope += preeditEmptyState
         scope += preedit
         scope += commonKeyActionListener
+        scope += japaneseInput
         scope += windowManager
         scope += kawaiiBar
         scope += horizontalCandidate
@@ -3308,6 +3311,8 @@ class InputView(
         }
         hideButtonsAdjustingOverlay()
         keyboardWindow.checkAndApplyFontRefresh()
+        // Every new input session starts from Chinese (leaves Japanese mode if still active).
+        japaneseInput.onNewInputSession()
         broadcaster.onStartInput(info, capFlags)
         returnKeyDrawable.updateDrawableOnEditorInfo(info)
         if (focusChangeResetKeyboard || !restarting) {
@@ -3329,6 +3334,17 @@ class InputView(
     }
 
     override fun handleFcitxEvent(it: FcitxEvent<*>) {
+        if (japaneseInput.isActive) {
+            // The Japanese composer owns preedit and candidates; nothing from the fcitx engine
+            // underneath (pinyin prediction, English spell, ...) may reach the bar.
+            when (it) {
+                is FcitxEvent.CandidateListEvent,
+                is FcitxEvent.PagedCandidateEvent,
+                is FcitxEvent.ClientPreeditEvent,
+                is FcitxEvent.InputPanelEvent -> return
+                else -> {}
+            }
+        }
         when (it) {
             is FcitxEvent.CandidateListEvent -> {
                 broadcaster.onCandidateUpdate(it.data)
@@ -3486,6 +3502,14 @@ class InputView(
         // True end of the InputView construction flow: every property initializer
         // has run (properties between the two init blocks run right before this).
         SleiPerformanceMetrics.markBuild("layout+rest")
+    }
+
+    /** Same as pressing the language key (keeps the Japanese step in the cycle). */
+    internal fun dispatchLanguageSwitch() {
+        commonKeyActionListener.listener.onKeyAction(
+            KeyAction.LangSwitchAction,
+            org.fcitx.fcitx5.android.input.keyboard.KeyActionListener.Source.Keyboard
+        )
     }
 
     internal fun cancelOngoingKeyActions() {
