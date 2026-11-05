@@ -10,6 +10,8 @@ import android.os.SystemClock
 import android.util.Log
 import fcitx5.slei.performance.SleiPerformanceMetrics
 import org.fcitx.fcitx5.android.input.config.ConfigProviders
+import org.fcitx.fcitx5.android.input.config.UserConfigFiles
+import org.fcitx.fcitx5.android.input.config.UserJsonConfigStore
 import java.io.File
 
 class DefaultFontProvider : FontProviderApi {
@@ -20,6 +22,10 @@ class DefaultFontProvider : FontProviderApi {
 
     @Volatile
     private var cachedFontConfig: FontConfig? = null
+    // Set only when fontset.json is confirmed absent. Without it every key would re-probe
+    // storage through ConfigProviders. Cleared together with cachedFontConfig in clearCache().
+    @Volatile
+    private var fontsetAbsent = false
     private val cachedFontTypefaceMap = mutableMapOf<String, Typeface?>()
     private val cachedTypefaceByPaths = mutableMapOf<List<String>, Typeface?>()
     @Volatile
@@ -30,6 +36,7 @@ class DefaultFontProvider : FontProviderApi {
     override fun clearCache() {
         synchronized(this) {
             cachedFontConfig = null
+            fontsetAbsent = false
             cachedFontTypefaceMap.clear()
             cachedTypefaceByPaths.clear()
             cachedFontSizeMap = null
@@ -92,9 +99,23 @@ class DefaultFontProvider : FontProviderApi {
 
     private fun loadFontConfigLocked(): FontConfig? {
         cachedFontConfig?.let { return it }
-        val snapshot = ConfigProviders.readFontsetPathMapSnapshot().getOrNull() ?: return null
+        val snapshot = readFontsetSnapshotLocked() ?: return null
         val fontsDir = snapshot.file?.parentFile ?: return null
         return FontConfig(snapshot.value, fontsDir).also { cachedFontConfig = it }
+    }
+
+    /**
+     * Reads fontset.json and remembers a confirmed absence. A parse error or an unresolvable
+     * font directory is not remembered, so the next call retries. Callers hold the lock.
+     */
+    private fun readFontsetSnapshotLocked(): UserJsonConfigStore.JsonSnapshot<Map<String, List<String>>>? {
+        if (fontsetAbsent) return null
+        val result = ConfigProviders.readFontsetPathMapSnapshot()
+        val snapshot = result.getOrNull()
+        if (snapshot == null && result.isSuccess && UserConfigFiles.fontsetJson() != null) {
+            fontsetAbsent = true
+        }
+        return snapshot
     }
 
     private fun loadTypefaceLocked(key: String, config: FontConfig): Typeface? {
@@ -167,9 +188,7 @@ class DefaultFontProvider : FontProviderApi {
         val recheck = cachedFontSizeMap
         if (recheck != null) return recheck
 
-        val snapshot = ConfigProviders
-            .readFontsetPathMapSnapshot()
-            .getOrNull() ?: run {
+        val snapshot = readFontsetSnapshotLocked() ?: run {
             cachedFontSizeMap = null
             return mutableMapOf()
         }

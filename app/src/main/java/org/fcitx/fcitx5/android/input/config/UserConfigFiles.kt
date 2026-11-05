@@ -19,7 +19,20 @@ object UserConfigFiles {
         "^TextKeyboardLayout(?:\\..+)?_backup_\\d{8}_\\d{6}(?:_.*)?\\.json$"
     )
 
-    private fun externalFilesRoot(): File? = appContext.getExternalFilesDir(null)
+    @Volatile
+    private var cachedExternalFilesRoot: File? = null
+
+    /**
+     * Resolved once per process: getExternalFilesDir is a binder call plus a storage stat, and
+     * font and layout lookups reach it on every key. A null result is not cached, so a later
+     * call can retry.
+     */
+    private fun externalFilesRoot(): File? {
+        cachedExternalFilesRoot?.let { return it }
+        val root = appContext.getExternalFilesDir(null) ?: return null
+        cachedExternalFilesRoot = root
+        return root
+    }
 
     fun configDir(): File? = externalFilesRoot()?.let { File(it, "config") }
 
