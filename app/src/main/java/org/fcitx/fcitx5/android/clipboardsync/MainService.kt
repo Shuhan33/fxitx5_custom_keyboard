@@ -533,7 +533,7 @@ class MainService : FcitxPluginService() {
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
-                        Log.e(TAG, "[Health] Fallback pull failed for ${endpoint.address}", error)
+                        Log.e(TAG, "[Health] Fallback pull failed for backend=${endpoint.backend}", error)
                         handleConnectivityFailure(endpoint, error)
                     }
                 }
@@ -787,7 +787,7 @@ class MainService : FcitxPluginService() {
                         continue
                     }
                     if (isSuppressedRemoteClipboard(data)) {
-                        Log.d(TAG, "[Pull] Skipping locally suppressed remote clipboard item: type=${data.type} text=${data.text}")
+                        Log.d(TAG, "[Pull] Skipping locally suppressed remote clipboard item: type=${data.type} textLength=${data.text.length}")
                         continue
                     }
                     if (data.text.isBlank() && !data.type.equals("Text", ignoreCase = true)) {
@@ -821,7 +821,7 @@ class MainService : FcitxPluginService() {
             var importedAll = true
             itemsToImport.forEach { data ->
                 val remoteText = data.text
-                Log.d(TAG, "[Pull] Processed data: type=${data.type}, text=$remoteText")
+                Log.d(TAG, "[Pull] Processed data: type=${data.type}, textLength=${remoteText.length}")
                 acknowledgePendingUploads(remoteText)
                 if (shouldSkipRemoteImportForLocalEcho(data, remoteText)) {
                     Log.d(TAG, "[Pull] Skipping echoed local clipboard item in remote history")
@@ -1731,16 +1731,16 @@ class MainService : FcitxPluginService() {
         endpoint: ServerEndpoint,
         cause: Exception
     ): Boolean {
-        Log.e(TAG, "[Pull] Error checking remote clipboard for ${endpoint.profileKey}@${endpoint.address}", cause)
+        Log.e(TAG, "[Pull] Error checking remote clipboard for backend=${endpoint.backend}", cause)
 
         if (verifyEndpointRecovered(endpoint)) {
-            Log.d(TAG, "[Pull] Endpoint recovered during connectivity retry: ${endpoint.address}")
+            Log.d(TAG, "[Pull] Endpoint recovered during connectivity retry for backend=${endpoint.backend}")
             resetFailureState()
             return true
         }
 
         if (switchToReachableEndpoint(endpoint)) {
-            Log.w(TAG, "[Pull] Switched active endpoint away from ${endpoint.address}")
+            Log.w(TAG, "[Pull] Switched active endpoint away from backend=${endpoint.backend}")
             resetRemoteCache()
             resetFailureState()
             return true
@@ -2146,7 +2146,7 @@ class MainService : FcitxPluginService() {
                     }
                     Log.d(TAG, "[Push] Uploaded queued clipboard item from $reason")
                 } catch (e: SyncClient.StaleClipboardContentException) {
-                    Log.w(TAG, "[Push] Dropping stale clipboard item from queue: ${next.content}", e)
+                    Log.w(TAG, "[Push] Dropping stale clipboard item from queue (length=${next.content.length})", e)
                     pendingUploadMutex.withLock {
                         if (pendingUploads.firstOrNull() == next) {
                             pendingUploads.removeAt(0)

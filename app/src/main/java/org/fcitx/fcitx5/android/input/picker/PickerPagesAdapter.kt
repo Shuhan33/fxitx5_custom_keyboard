@@ -81,6 +81,7 @@ class PickerPagesAdapter(
     private var lastStripHeight = 0
 
     private val recentlyUsed = RecentlyUsed(recentlyUsedFileName, density.pageSize)
+    private var cachedFontRevision = FontProviders.revision
     private var cachedTextSize = FontProviders.getFontSize("key_main_font", density.textSize)
     private var cachedTypeface: Typeface = FontProviders.resolveTypeface("key_main_font")
 
@@ -304,9 +305,11 @@ class PickerPagesAdapter(
     }
 
     private fun applyFont(keyView: TextKeyView) {
-        if (FontProviders.needsRefresh()) {
+        val revision = FontProviders.revision
+        if (cachedFontRevision != revision) {
             cachedTextSize = FontProviders.getFontSize("key_main_font", density.textSize)
             cachedTypeface = FontProviders.resolveTypeface("key_main_font", cachedTypeface)
+            cachedFontRevision = revision
         }
         keyView.mainText.setTextSize(TypedValue.COMPLEX_UNIT_SP, cachedTextSize)
         if (keyView.mainText.typeface !== cachedTypeface) keyView.mainText.typeface = cachedTypeface

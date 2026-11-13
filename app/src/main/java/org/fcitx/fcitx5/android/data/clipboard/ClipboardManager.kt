@@ -516,7 +516,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
                         finalEntry = entry.copy(text = staged.uri.toString())
                         Timber.d("Staged clipboard image to local file: ${staged.uri}")
                     } else {
-                        Timber.w("Failed to stage clipboard image URI: ${entry.text}")
+                        Timber.w("Failed to stage clipboard image URI")
                     }
                 }
                 insertOrUpdateEntry(finalEntry, notifyListeners = true)

@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <!-- Clipboard history can contain copied credentials and one-time codes. -->
+    <exclude domain="database" path="clbdb" />
+    <exclude domain="database" path="clbdb-wal" />
+    <exclude domain="database" path="clbdb-shm" />
+    <exclude domain="database" path="clbdb-journal" />
+    <exclude domain="device_database" path="clbdb" />
+    <exclude domain="device_database" path="clbdb-wal" />
+    <exclude domain="device_database" path="clbdb-shm" />
+    <exclude domain="device_database" path="clbdb-journal" />
     <exclude
         domain="file"
         path="usr" />

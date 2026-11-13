@@ -24,11 +24,14 @@ open class HorizontalCandidateViewAdapter(val theme: Theme) :
     RecyclerView.Adapter<CandidateViewHolder>() {
 
     // Cache candidate font and refresh only when font configuration changes.
+    private var candFontRevision = FontProviders.revision
     private var candFont: Typeface? = FontProviders.resolveTypeface("cand_font", null)
 
     private fun refreshCandidateFontIfNeeded(): Boolean {
-        if (FontProviders.needsRefresh()) {
+        val revision = FontProviders.revision
+        if (candFontRevision != revision) {
             candFont = FontProviders.resolveTypeface("cand_font", null)
+            candFontRevision = revision
             return true
         }
         return false

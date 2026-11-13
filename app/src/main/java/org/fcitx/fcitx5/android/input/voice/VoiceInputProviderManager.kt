@@ -379,7 +379,7 @@ object VoiceInputProviderManager {
             override fun onPartialResult(text: String?) {
                 val t = text.orEmpty()
                 if (t.isNotBlank()) {
-                    logI("partial result len=${t.length}: $t")
+                    logI("partial result len=${t.length}")
                     service.lifecycleScope.launch {
                         service.setVoiceComposingText(t)
                         onPartialResult(t)
@@ -390,8 +390,8 @@ object VoiceInputProviderManager {
             override fun onSegmentFinal(text: String?) {
                 val t = text.orEmpty()
                 if (t.isNotBlank()) {
-                    logI("segment final len=${t.length}: $t")
-                    tlogI("Voice segment final: $t")
+                    logI("segment final len=${t.length}")
+                    tlogI("Voice segment final len=${t.length}")
                     service.lifecycleScope.launch { service.commitText(t) }
                 } else {
                     logI("segment final blank")

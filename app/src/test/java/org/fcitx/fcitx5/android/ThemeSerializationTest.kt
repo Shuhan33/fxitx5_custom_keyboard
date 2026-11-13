@@ -18,13 +18,15 @@ class ThemeSerializationTest {
         Json.decodeFromString(CustomThemeSerializer.WithMigrationStatus, this)
 
     @Test
-    fun preservation() {
+    fun currentVersion21() {
         val fakeCustomTheme =
             ThemePreset
                 .TransparentDark
                 .deriveCustomBackground("", "", "")
 
-        val (decoded, migrated) = fakeCustomTheme.toJson().toCustomTheme()
+        val serialized = fakeCustomTheme.toJson()
+        Assert.assertTrue("Current themes serialize as version 2.1", serialized.contains("\"version\":\"2.1\""))
+        val (decoded, migrated) = serialized.toCustomTheme()
 
         Assert.assertEquals("Migration shouldn't happen", false, migrated)
         Assert.assertEquals("Versioning preserves the original structure", fakeCustomTheme, decoded)
@@ -98,7 +100,10 @@ class ThemeSerializationTest {
             }
         """.trimIndent()
         val (decoded, migrated) = raw.toCustomTheme()
-        Assert.assertEquals("Migration shouldn't happen", false, migrated)
+        Assert.assertEquals("Version 2.0 to 2.1 migration should happen", true, migrated)
+        Assert.assertEquals(-1, decoded.candidateTextColor)
+        Assert.assertEquals(-1, decoded.candidateLabelColor)
+        Assert.assertEquals(-905969665, decoded.candidateCommentColor)
         Assert.assertEquals("Round trip", decoded, decoded.toJson().toCustomTheme().first)
     }
 }

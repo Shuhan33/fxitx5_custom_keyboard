@@ -169,7 +169,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val candidatesView: CandidatesView
     )
     private var preparedViews: PreparedViews? = null
-    private val prewarmInputViewsRunnable = Runnable(::prewarmInputViews)
     // 1-based ordinal of this service instance within the process (see SleiPerformanceMetrics).
     private var serviceOrdinal = 0
 
@@ -363,14 +362,14 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             when (intent?.action) {
                 BuildConfig.APPLICATION_ID + VoiceInputIpc.PARTIAL_ACTION_SUFFIX -> {
                     val text = intent.getStringExtra(VoiceInputIpc.EXTRA_PARTIAL_TEXT).orEmpty()
-                    android.util.Log.i("FcitxVoiceInput", "floating partial received len=${text.length}: $text")
+                    android.util.Log.i("FcitxVoiceInput", "floating partial received len=${text.length}")
                     if (text.isNotBlank()) {
                         lifecycleScope.launch { setVoiceComposingText(text) }
                     }
                 }
                 BuildConfig.APPLICATION_ID + VoiceInputIpc.COMMIT_ACTION_SUFFIX -> {
                     val text = intent.getStringExtra(VoiceInputIpc.EXTRA_COMMIT_TEXT).orEmpty()
-                    android.util.Log.i("FcitxVoiceInput", "floating commit received len=${text.length}: $text")
+                    android.util.Log.i("FcitxVoiceInput", "floating commit received len=${text.length}")
                     if (text.isNotBlank()) {
                         lifecycleScope.launch { commitVoiceText(text) }
                         VoiceInputProviderManager.floatingCommitListener?.invoke(text)
@@ -456,8 +455,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         val startedAt = SystemClock.elapsedRealtime()
         SleiPerformanceMetrics.beginBuild()
         val input = InputView(this, fcitx, theme)
-        // Build the main/numeric keyboard hierarchies now instead of on the first
-        // popup, so switchLayout only attaches an already constructed hierarchy.
         runCatching { input.prewarmKeyboardViews() }
         SleiPerformanceMetrics.markBuild("kbPre")
         val candidates = SleiPerformanceMetrics
@@ -674,11 +671,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             "FcitxColdStart",
             "service.onCreate duration=${duration}ms"
         )
-        // InputMethodService is commonly created well before the first text field is tapped.
-        // Spend that idle window constructing the expensive key hierarchy so onCreateInputView
-        // only attaches already-built views. This stays on the main thread because Android View
-        // objects must never be created from a worker thread.
-        contentView.post(prewarmInputViewsRunnable)
+        // Construct input hierarchies only when the framework requests the keyboard view.
+        // Building both text and numeric keyboards during bind does avoidable main-thread
+        // work and retains an unattached hierarchy while the IME is idle.
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -703,7 +698,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                         else -> if (it.unicode > 0) {
                             commitText(Character.toString(it.unicode))
                         } else {
-                            Timber.w("Unhandled Virtual KeyEvent: $it")
+                            Timber.w("Unhandled virtual key event")
                         }
                     }
                 } else {
@@ -756,7 +751,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
                         if (!it.up && it.unicode > 0) {
                             commitText(Character.toString(it.unicode))
                         } else {
-                            Timber.w("Unhandled Fcitx KeyEvent: $it")
+                            Timber.w("Unhandled Fcitx key event")
                         }
                     }
                 }
@@ -1327,8 +1322,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
         cachedKeyEvents.put(timestamp, forwardedEvent)
         val sym = KeySym.fromKeyEvent(forwardedEvent)
-        Timber.v("forwardKeyEvent: keyCode=%d scanCode=%d action=%d unicodeChar=%d sym=%s",
-            forwardedEvent.keyCode, forwardedEvent.scanCode, forwardedEvent.action, forwardedEvent.unicodeChar, sym)
+        Timber.v("forwardKeyEvent: action=%d", forwardedEvent.action)
         if (sym != null) {
             var states = if (preserveModifierState) {
                 keyStatesFromEventRaw(forwardedEvent)
@@ -1345,7 +1339,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
             return true
         }
-        Timber.v("Skipped KeyEvent: $forwardedEvent")
+        Timber.v("Skipped key event")
         return false
     }
 
@@ -1526,8 +1520,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             KeyEvent.FLAG_FROM_SYSTEM, // flags: mark as coming from system hardware
             InputDevice.SOURCE_KEYBOARD // source: physical keyboard
         )
-        Timber.v("sendSimulatedKeyEvent: keyCode=%d scanCode=%d action=%d unicodeChar=%d",
-            keyCode, scanCode, action, event.unicodeChar)
+        Timber.v("sendSimulatedKeyEvent: action=%d", action)
         forwardKeyEvent(event, preserveModifierState = true)
         if (fromMacro) {
             inputView?.clearKawaiiBarFocusState()
@@ -1961,7 +1954,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             }
         } else {
             // composing text content changed
-            Timber.d("updateComposingText: '$text' lastSelection=$lastSelection")
+            Timber.d("updateComposingText: len=${text.length} lastSelection=$lastSelection")
             if (text.isEmpty()) {
                 if (composing.isEmpty()) {
                     // do not reset saved selection range when incoming composing
@@ -2104,6 +2097,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         Timber.d("onFinishInput")
         SleiLifecycleBreadcrumbs.mark("onFinishInput")
         MainService.stopSyncService(this)
+        discardPreparedViews()
         inputView?.cancelOngoingKeyActions()
         localComposer?.finishSession()
         InputStatsManager.flush()
@@ -2133,10 +2127,6 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         SleiLifecycleBreadcrumbs.mark("service onDestroy #$serviceOrdinal")
         SleiPerformanceMetrics.markServiceDestroy()
         MainService.stopSyncService(this)
-        if (this::contentView.isInitialized) {
-            contentView.removeCallbacks(prewarmInputViewsRunnable)
-        }
-        discardPreparedViews()
         inputView?.cancelOngoingKeyActions()
         InputStatsManager.flushBlocking()
         recreateInputViewPrefs.forEach {

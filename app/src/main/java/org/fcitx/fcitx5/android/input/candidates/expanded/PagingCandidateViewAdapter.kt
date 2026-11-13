@@ -19,11 +19,14 @@ open class PagingCandidateViewAdapter(val theme: Theme) :
     PagingDataAdapter<CandidateWord, CandidateViewHolder>(diffCallback) {
 
     // Cache candidate font and refresh only when font configuration changes.
+    private var candFontRevision = FontProviders.revision
     private var candFont: Typeface? = FontProviders.resolveTypeface("cand_font", null)
 
     private fun refreshCandidateFontIfNeeded() {
-        if (FontProviders.needsRefresh()) {
+        val revision = FontProviders.revision
+        if (candFontRevision != revision) {
             candFont = FontProviders.resolveTypeface("cand_font", null)
+            candFontRevision = revision
         }
     }
 
@@ -42,7 +45,7 @@ open class PagingCandidateViewAdapter(val theme: Theme) :
         private set
 
     fun refreshWithOffset(offset: Int, force: Boolean = false) {
-        if (!force && this.offset == offset && !FontProviders.needsRefresh()) return
+        if (!force && this.offset == offset && candFontRevision == FontProviders.revision) return
         refreshCandidateFontIfNeeded()
         this.offset = offset
         refresh()

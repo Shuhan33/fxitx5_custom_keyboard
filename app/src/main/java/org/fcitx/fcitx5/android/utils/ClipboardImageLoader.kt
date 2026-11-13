@@ -93,7 +93,7 @@ private fun extractFilePathFromTreeUri(treeUri: Uri): String? {
     }
 }
 
-private fun calculateInSampleSize(
+internal fun calculateInSampleSize(
     width: Int,
     height: Int,
     reqWidth: Int,
@@ -102,9 +102,12 @@ private fun calculateInSampleSize(
     var sampleSize = 1
     var currentWidth = width
     var currentHeight = height
-    while (currentHeight / 2 >= reqHeight && currentWidth / 2 >= reqWidth) {
-        currentHeight /= 2
-        currentWidth /= 2
+    while (
+        sampleSize <= Int.MAX_VALUE / 2 &&
+        (currentHeight / 2 >= reqHeight || currentWidth / 2 >= reqWidth)
+    ) {
+        currentHeight = (currentHeight / 2).coerceAtLeast(1)
+        currentWidth = (currentWidth / 2).coerceAtLeast(1)
         sampleSize *= 2
     }
     return sampleSize

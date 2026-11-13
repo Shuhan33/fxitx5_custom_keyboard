@@ -170,7 +170,7 @@ object SyncClient {
             val request = when (backend) {
                 ServerBackend.SYNCCLIPBOARD -> {
                     val (_, jsonUrl) = getBaseAndJsonUrl(serverUrl)
-                    Log.d(TAG, "[Test] Testing SyncClipboard connection to $jsonUrl")
+                    Log.d(TAG, "[Test] Testing SyncClipboard connection")
                     Request.Builder()
                         .url(jsonUrl)
                         .header("Authorization", Credentials.basic(username, pass))
@@ -180,7 +180,7 @@ object SyncClient {
 
                 ServerBackend.ONECLIP -> {
                     val historyUrl = oneClipUrl(serverUrl, "/api/current")
-                    Log.d(TAG, "[Test] Testing OneClip connection to $historyUrl")
+                    Log.d(TAG, "[Test] Testing OneClip connection")
                     Request.Builder()
                         .url(historyUrl)
                         .get()
