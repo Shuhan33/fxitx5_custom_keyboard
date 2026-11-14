@@ -4,7 +4,6 @@
  */
 package org.fcitx.fcitx5.android.input.japanese
 
-import androidx.lifecycle.lifecycleScope
 import fcitx5.slei.japanese.JapaneseCandidateProvider
 import fcitx5.slei.japanese.KanaCandidateProvider
 import fcitx5.slei.japanese.RomajiComposer
@@ -13,7 +12,6 @@ import org.fcitx.fcitx5.android.core.FcitxEvent
 import org.fcitx.fcitx5.android.core.FcitxKeyMapping
 import org.fcitx.fcitx5.android.core.FormattedText
 import org.fcitx.fcitx5.android.core.InputMethodEntry
-import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.input.FcitxInputMethodService
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcastReceiver
 import org.fcitx.fcitx5.android.input.broadcast.InputBroadcaster
@@ -36,12 +34,9 @@ import org.mechdancer.dependency.manager.must
 /**
  * Japanese romaji input implemented on the Kotlin side.
  *
- * Language cycle: the Japanese step is inserted right after the "anchor" fcitx input method,
- * which is `keyboard-us` when it is enabled (so the cycle reads 中文 → English → 日本語 → 中文),
- * otherwise the last enabled input method. While Japanese is active fcitx simply stays on the
- * anchor; no key of the Japanese keyboard is ever sent to fcitx, fcitx candidate/preedit
- * events are ignored by InputView and the service, and leaving Japanese continues fcitx's
- * normal enumeration from the anchor.
+ * Japanese is entered from the space-key swipe and temporarily overlays the currently active
+ * fcitx input method. While Japanese is active fcitx stays on that exact input method; no key
+ * of the Japanese keyboard is sent to fcitx, and leaving Japanese returns to the same anchor.
  *
  * Composition: [RomajiComposer] produces the reading; the composing text is shown inline via
  * [FcitxInputMethodService.updateLocalComposingText] and in the preedit bar, and the
@@ -66,22 +61,23 @@ class JapaneseInputComponent :
 
     private var candidates: List<String> = emptyList()
 
-    override var isActive: Boolean = false
-        private set
+    private val modeState = JapaneseInputModeState()
+
+    override val isActive: Boolean
+        get() = modeState.isActive
 
     /** fcitx input method that stays active underneath the Japanese keyboard. */
-    private var anchorIme: String? = null
+    private val anchorIme: String?
+        get() = modeState.anchorIme
 
     private val keyboardWindow: KeyboardWindow?
         get() = windowManager.getEssentialWindow(KeyboardWindow) as? KeyboardWindow
 
-    // ---- language cycle ------------------------------------------------------------------
+    // ---- language switching ---------------------------------------------------------------
 
     /** Enter Japanese mode on top of [anchor] (the currently active fcitx input method). */
     fun enter(anchor: String) {
-        if (isActive) return
-        isActive = true
-        anchorIme = anchor
+        if (!modeState.enter(anchor)) return
         composer.clear()
         candidates = emptyList()
         // Keep whatever the engine underneath was composing (e.g. an English word with spell
@@ -102,24 +98,38 @@ class JapaneseInputComponent :
         )
     }
 
-    /** Language key while Japanese is active: commit and continue fcitx's enumeration. */
-    fun leaveToNextInputMethod() {
+    /** Space swipe or the ordinary language key returns to the exact underlying input method. */
+    fun leaveToAnchorInputMethod() {
         if (!isActive) return
+        val previousIme = anchorIme
         commitComposition()
         deactivate()
-        service.postFcitxJob {
-            enumerateIme()
-            service.lifecycleScope.launch { switchToTextKeyboard() }
-        }
+        // fcitx stayed on [previousIme] while the local Japanese composer was active. Do not
+        // enumerate or reactivate here: an external IME selection must remain authoritative.
+        if (previousIme != null) switchToTextKeyboard()
     }
 
-    /** Session end (keyboard hidden / editor finished): commit and return to Chinese. */
+    /** Toggle Japanese from the space-key swipe while preserving this Android editor session. */
+    fun toggleFromSpaceSwipe() {
+        if (isActive) {
+            leaveToAnchorInputMethod()
+            return
+        }
+        val session = service.inputSessionGenerationSnapshot
+        val anchor = runCatching {
+            fcitx.runImmediately { inputMethodEntryCached.uniqueName }
+        }.getOrNull() ?: return
+        if (session != service.inputSessionGenerationSnapshot) return
+        enter(anchor)
+    }
+
+    /** Session end (keyboard hidden / editor finished): commit and leave fcitx on its anchor. */
     override fun finishSession() {
         if (!isActive) return
+        val previousIme = anchorIme
         commitComposition()
         deactivate()
-        restoreChineseInputMethod()
-        switchToTextKeyboard()
+        if (previousIme != null) switchToTextKeyboard()
     }
 
     /**
@@ -129,8 +139,11 @@ class JapaneseInputComponent :
      */
     fun onNewInputSession() {
         if (!isActive) return
+        val previousIme = anchorIme
+        // The service has already reset the old editor's composing state. Drop local state
+        // without committing that reading into the newly focused editor or changing its IME.
         deactivate()
-        restoreChineseInputMethod()
+        if (previousIme != null) switchToTextKeyboard()
     }
 
     override fun onImeUpdate(ime: InputMethodEntry) {
@@ -144,8 +157,7 @@ class JapaneseInputComponent :
     }
 
     private fun deactivate() {
-        isActive = false
-        anchorIme = null
+        modeState.deactivate()
         composer.clear()
         candidates = emptyList()
         if (service.localComposer === this) service.localComposer = null
@@ -163,16 +175,6 @@ class JapaneseInputComponent :
             remember = false,
             inheritTextHeight = false
         )
-    }
-
-    private fun restoreChineseInputMethod() {
-        service.postFcitxJob {
-            val chinese = enabledIme().firstOrNull { it.languageCode.startsWith("zh") }
-                ?: return@postFcitxJob
-            if (currentIme().uniqueName != chinese.uniqueName) {
-                activateIme(chinese.uniqueName)
-            }
-        }
     }
 
     // ---- key handling --------------------------------------------------------------------
@@ -217,6 +219,10 @@ class JapaneseInputComponent :
                 return false
             }
             is KeyAction.BackspaceHoldEndAction,
+            // This is a release-only cleanup emitted on every space-key up/cancel. Let the
+            // common listener stop voice hold without committing Japanese text; the following
+            // space tap must still be able to select the current candidate.
+            is KeyAction.VoiceInputHoldEnd,
             is KeyAction.MoveSelectionAction -> return false
             is KeyAction.DeleteSelectionAction -> {
                 // backspace swipe-left over a composition discards it (CommonKeyActionListener
@@ -337,18 +343,4 @@ class JapaneseInputComponent :
         }
     }
 
-    companion object {
-        const val KEYBOARD_US = "keyboard-us"
-
-        fun isEnabledInCycle(): Boolean =
-            AppPrefs.getInstance().keyboard.japaneseKeyboardInCycle.getValue()
-
-        /**
-         * The fcitx input method after which the Japanese step is inserted: `keyboard-us` if
-         * enabled, otherwise the last enabled input method.
-         */
-        fun anchorOf(enabled: Array<InputMethodEntry>): String? =
-            (enabled.firstOrNull { it.uniqueName == KEYBOARD_US } ?: enabled.lastOrNull())
-                ?.uniqueName
-    }
 }

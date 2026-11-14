@@ -3311,7 +3311,8 @@ class InputView(
         }
         hideButtonsAdjustingOverlay()
         keyboardWindow.checkAndApplyFontRefresh()
-        // Every new input session starts from Chinese (leaves Japanese mode if still active).
+        // Every new input session leaves the temporary Japanese mode while preserving the
+        // underlying fcitx input method selected before Japanese was entered.
         japaneseInput.onNewInputSession()
         broadcaster.onStartInput(info, capFlags)
         returnKeyDrawable.updateDrawableOnEditorInfo(info)

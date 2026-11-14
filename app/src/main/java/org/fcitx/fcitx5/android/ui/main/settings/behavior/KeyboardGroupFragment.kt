@@ -318,7 +318,7 @@ class KeyboardGroupFragment : ManagedPreferenceFragment(AppPrefs.getInstance().k
                 "swipe_symbol_behavior", "keep_keyboard_letters_uppercase",
                 "reset_keyboard_on_focus_change",
                 "space_long_press_behavior", "space_key_label_mode",
-                "space_swipe_move_cursor", "show_lang_switch_key",
+                "space_swipe_behavior", "show_lang_switch_key",
                 "lang_switch_key_behavior", "english_spell_candidates",
             ),
             GROUP_FEEDBACK to setOf(

@@ -62,7 +62,6 @@ import org.fcitx.fcitx5.android.input.AutoScaleTextView
 import org.fcitx.fcitx5.android.input.font.FontProviders
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.GestureType
 import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.OnGestureListener
-import org.fcitx.fcitx5.android.input.keyboard.CustomGestureView.SwipeAxis
 import org.fcitx.fcitx5.android.input.popup.PopupAction
 import org.fcitx.fcitx5.android.input.popup.PopupActionListener
 import org.fcitx.fcitx5.android.utils.DeviceInfoCollector
@@ -125,11 +124,27 @@ abstract class BaseKeyboard(
     private val expandKeypressArea by prefs.keyboard.expandKeypressArea
     private val swipeSymbolDirection by prefs.keyboard.swipeSymbolDirection
 
-    private val spaceSwipeMoveCursor = prefs.keyboard.spaceSwipeMoveCursor
+    private val spaceSwipeBehavior = prefs.keyboard.spaceSwipeBehavior
     private val spaceKeys = mutableListOf<KeyView>()
-    private val spaceSwipeChangeListener = ManagedPreference.OnChangeListener<Boolean> { _, v ->
+    private val spaceSwipeChangeListener = ManagedPreference.OnChangeListener<SpaceSwipeBehavior> { _, v ->
         spaceKeys.forEach {
-            it.swipeEnabled = v
+            applySpaceSwipeBehavior(it, v)
+        }
+    }
+
+    private fun applySpaceSwipeBehavior(view: KeyView, behavior: SpaceSwipeBehavior) {
+        view.swipeEnabled = behavior != SpaceSwipeBehavior.Disabled
+        view.cancelSwipeOnAdditionalPointer = true
+        view.swipeRepeatEnabled = true
+        view.swipeThresholdX = when (behavior) {
+            SpaceSwipeBehavior.JapaneseToggle -> inputSwipeThreshold
+            SpaceSwipeBehavior.MoveCursor -> selectionSwipeThreshold
+            SpaceSwipeBehavior.Disabled -> disabledSwipeThreshold
+        }
+        view.swipeThresholdY = if (behavior == SpaceSwipeBehavior.Disabled) {
+            disabledSwipeThreshold
+        } else {
+            selectionSwipeThreshold * 1.5f
         }
     }
 
@@ -231,7 +246,7 @@ abstract class BaseKeyboard(
         clipChildren = false
         clipToPadding = false
         reloadLayout()
-        spaceSwipeMoveCursor.registerOnChangeListener(spaceSwipeChangeListener)
+        spaceSwipeBehavior.registerOnChangeListener(spaceSwipeChangeListener)
         splitKeyboardManager.registerListener(splitStateChangeListener)
     }
 
@@ -294,6 +309,9 @@ abstract class BaseKeyboard(
             row.forEach { (def, keyView) ->
                 if ((def is SpaceKey || def is MiniSpaceKey) && !spaceKeys.contains(keyView)) {
                     spaceKeys.add(keyView)
+                }
+                if (def is SpaceKey || def is MiniSpaceKey) {
+                    applySpaceSwipeBehavior(keyView, spaceSwipeBehavior.getValue())
                 }
                 if (def.composeOverride != null) {
                     composeAwareKeys += ComposeAwareKey(
@@ -1216,69 +1234,60 @@ abstract class BaseKeyboard(
             }
             if (def is SpaceKey || def is MiniSpaceKey) {
                 spaceKeys.add(this)
-                swipeEnabled = spaceSwipeMoveCursor.getValue()
-                swipeRepeatEnabled = true
-                swipeThresholdX = selectionSwipeThreshold
-                // Use a larger threshold for Y axis to avoid accidental up/down triggers
-                // when user intends to swipe left/right
-                swipeThresholdY = selectionSwipeThreshold * 1.5f
-                // Track the locked swipe direction to avoid conflicting gestures
-                var swipeDirectionLocked: SwipeAxis? = null
+                applySpaceSwipeBehavior(this, spaceSwipeBehavior.getValue())
+                val gestureTracker = SpaceSwipeGestureTracker()
+                var gestureBehavior = spaceSwipeBehavior.getValue()
                 onGestureListener = OnGestureListener { view, event ->
                     when (event.type) {
-                        GestureType.Move -> {
-                            val countX = event.countX
-                            val countY = event.countY
-
-                            // Lock direction on first swipe
-                            if (swipeDirectionLocked == null && (countX != 0 || countY != 0)) {
-                                swipeDirectionLocked = if (kotlin.math.abs(countX) >= kotlin.math.abs(countY)) {
-                                    SwipeAxis.X
-                                } else {
-                                    SwipeAxis.Y
-                                }
-                            }
-
-                            val handled = when (swipeDirectionLocked) {
-                                SwipeAxis.X -> {
-                                    if (countX != 0) {
-                                        val sym =
-                                            if (countX > 0) FcitxKeyMapping.FcitxKey_Right else FcitxKeyMapping.FcitxKey_Left
-                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
-                                        repeat(countX.absoluteValue) {
-                                            onAction(action)
-                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
-                                        }
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                SwipeAxis.Y -> {
-                                    if (countY != 0) {
-                                        val sym =
-                                            if (countY > 0) FcitxKeyMapping.FcitxKey_Down else FcitxKeyMapping.FcitxKey_Up
-                                        val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
-                                        repeat(countY.absoluteValue) {
-                                            onAction(action)
-                                            if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
-                                        }
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                null -> false
-                            }
-                            handled
-                        }
-                        GestureType.Up -> {
-                            // Reset direction lock on finger up
-                            swipeDirectionLocked = null
-                            onAction(KeyAction.VoiceInputHoldEnd)
+                        GestureType.Down -> {
+                            gestureBehavior = spaceSwipeBehavior.getValue()
+                            gestureTracker.onDown(event.x, event.y)
                             false
                         }
-                        else -> false
+                        GestureType.Move -> {
+                            when (val outcome = gestureTracker.onMove(
+                                gestureBehavior,
+                                event.countX,
+                                event.countY,
+                                event.x,
+                                event.y
+                            )) {
+                                is SpaceSwipeOutcome.MoveCursor -> {
+                                    val sym = when {
+                                        outcome.countX > 0 -> FcitxKeyMapping.FcitxKey_Right
+                                        outcome.countX < 0 -> FcitxKeyMapping.FcitxKey_Left
+                                        outcome.countY > 0 -> FcitxKeyMapping.FcitxKey_Down
+                                        outcome.countY < 0 -> FcitxKeyMapping.FcitxKey_Up
+                                        else -> return@OnGestureListener false
+                                    }
+                                    val count = if (outcome.countX != 0) {
+                                        outcome.countX.absoluteValue
+                                    } else {
+                                        outcome.countY.absoluteValue
+                                    }
+                                    val action = KeyAction.SymAction(KeySym(sym), KeyStates.Virtual)
+                                    repeat(count) {
+                                        onAction(action)
+                                        if (hapticOnRepeat) InputFeedbacks.hapticFeedback(view)
+                                    }
+                                    true
+                                }
+                                SpaceSwipeOutcome.Consume,
+                                SpaceSwipeOutcome.ToggleJapanese -> true
+                                SpaceSwipeOutcome.None -> false
+                            }
+                        }
+                        GestureType.Up -> {
+                            onAction(KeyAction.VoiceInputHoldEnd)
+                            when (gestureTracker.onUp(gestureBehavior, event.cancelled)) {
+                                SpaceSwipeOutcome.ToggleJapanese -> {
+                                    onAction(KeyAction.JapaneseSpaceSwipeAction)
+                                    true
+                                }
+                                SpaceSwipeOutcome.Consume -> true
+                                else -> false
+                            }
+                        }
                     }
                 }
             } else if (def is BackspaceKey) {

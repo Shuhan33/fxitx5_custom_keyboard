@@ -654,6 +654,9 @@
     <string name="share">共有</string>
     <string name="show_candidates_window">候補ウィンドウを表示</string>
     <string name="space_swipe_move_cursor">スペースキーをスワイプしてカーソル移動</string>
+    <string name="space_swipe_behavior">スペースキーのスワイプ操作</string>
+    <string name="space_swipe_behavior_japanese_toggle">日本語に切替 / 前の言語に戻る</string>
+    <string name="space_swipe_behavior_disabled">スワイプを無効にする</string>
     <string name="split_keyboard_calibration_title">分割キーボードのキャリブレーション</string>
     <string name="split_keyboard_enabled">自動分割キーボード</string>
     <string name="split_keyboard_threshold">分割キーボードのしきい値</string>

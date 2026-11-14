@@ -657,6 +657,9 @@
     <string name="space_behavior_voice_input">Zur Spracheingabe wechseln</string>
     <string name="space_behavior_voice_input_hold">Voice input (hold to talk)</string>
     <string name="space_swipe_move_cursor">Über die Leertaste wischen, um den Cursor zu bewegen</string>
+    <string name="space_swipe_behavior">Aktion beim Wischen über die Leertaste</string>
+    <string name="space_swipe_behavior_japanese_toggle">Zu Japanisch wechseln / zur vorherigen Sprache zurück</string>
+    <string name="space_swipe_behavior_disabled">Wischen deaktivieren</string>
     <string name="split_keyboard_calibration_title">Kalibrierung der geteilten Tastatur</string>
     <string name="split_keyboard_enabled">Auto-geteilte Tastatur</string>
     <string name="split_keyboard_threshold">Schwellenwert für geteilte Tastatur</string>

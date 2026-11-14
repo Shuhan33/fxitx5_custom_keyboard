@@ -33,6 +33,7 @@ class JapaneseKeyboard(
 
     companion object {
         const val Name = "JapaneseRomaji"
+        const val SpaceLabel = "日本語"
 
         /** Long vowel mark, also produced by `-` in romaji. */
         const val ChoonKey = "ー"
@@ -90,7 +91,7 @@ class JapaneseKeyboard(
                     LayoutSwitchKey("符号", PickerWindow.Key.Symbol.name, 0.12f),
                     LayoutSwitchKey("123", NumberKeyboard.Name, 0.12f),
                     punctuationKey("、", "！", arrayOf("，", ",", "！")),
-                    SpaceKey(displayText = "空白"),
+                    SpaceKey(displayText = SpaceLabel),
                     punctuationKey("。", "？", arrayOf("．", ".", "？", "…")),
                     *if (showLangSwitch) arrayOf(LanguageKey()) else emptyArray(),
                     ReturnKey()

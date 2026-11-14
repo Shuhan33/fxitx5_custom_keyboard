@@ -32,6 +32,7 @@ import org.fcitx.fcitx5.android.input.keyboard.KeyAction.DeleteSelectionAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.DirectCommitAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.FcitxKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.LangSwitchAction
+import org.fcitx.fcitx5.android.input.keyboard.KeyAction.JapaneseSpaceSwipeAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.MoveSelectionAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.PickerSwitchAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.QuickPhraseAction
@@ -226,40 +227,31 @@ class CommonKeyActionListener :
                     cancelOngoingActions()
                 }
                 is LangSwitchAction -> {
-                    when (langSwitchKeyBehavior) {
-                        LangSwitchBehavior.Enumerate -> {
-                            if (japaneseInput.isActive) {
-                                // 日本語 -> continue the fcitx cycle after the anchor input method
-                                japaneseInput.leaveToNextInputMethod()
-                            } else {
-                                service.postFcitxJob {
-                                    val enabled = enabledIme()
-                                    val current = currentIme().uniqueName
-                                    val japaneseNext = JapaneseInputComponent.isEnabledInCycle() &&
-                                        current == JapaneseInputComponent.anchorOf(enabled)
-                                    when {
-                                        // insert the Japanese step after the anchor (keyboard-us)
-                                        japaneseNext -> service.lifecycleScope.launch {
-                                            japaneseInput.enter(current)
-                                        }
-                                        enabled.size < 2 -> service.lifecycleScope.launch {
+                    when (languageKeyRoute(japaneseInput.isActive)) {
+                        LanguageKeyRoute.ReturnToPreviousInputMethod ->
+                            japaneseInput.leaveToAnchorInputMethod()
+                        LanguageKeyRoute.EnumerateInputMethods -> when (langSwitchKeyBehavior) {
+                            LangSwitchBehavior.Enumerate -> service.postFcitxJob {
+                                    if (enabledIme().size < 2) {
+                                        service.lifecycleScope.launch {
                                             service.showDialog(AddMoreInputMethodsPrompt.build(context))
                                         }
-                                        else -> enumerateIme()
+                                    } else {
+                                        enumerateIme()
                                     }
+                            }
+                            LangSwitchBehavior.ToggleActivate -> {
+                                service.postFcitxJob {
+                                    toggleIme()
                                 }
                             }
-                        }
-                        LangSwitchBehavior.ToggleActivate -> {
-                            service.postFcitxJob {
-                                toggleIme()
+                            LangSwitchBehavior.NextInputMethodApp -> {
+                                service.switchToNextIME()
                             }
-                        }
-                        LangSwitchBehavior.NextInputMethodApp -> {
-                            service.switchToNextIME()
                         }
                     }
                 }
+                is JapaneseSpaceSwipeAction -> japaneseInput.toggleFromSpaceSwipe()
                 is ShowInputMethodPickerAction -> showInputMethodPicker()
                 is MoveSelectionAction -> {
                     when (backspaceSwipeState) {

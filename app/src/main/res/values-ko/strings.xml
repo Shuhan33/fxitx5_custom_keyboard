@@ -647,6 +647,9 @@
     <string name="space_behavior_voice_input_hold">Voice input (hold to talk)</string>
     <string name="space_long_press_behavior">스페이스 키 길게 누르기 동작</string>
     <string name="space_swipe_move_cursor">스페이스 키를 밀어서 커서 이동</string>
+    <string name="space_swipe_behavior">스페이스 키 스와이프 동작</string>
+    <string name="space_swipe_behavior_japanese_toggle">일본어로 전환 / 이전 언어로 돌아가기</string>
+    <string name="space_swipe_behavior_disabled">스와이프 사용 안 함</string>
     <string name="split_keyboard_calibration_title">분할 키보드 보정</string>
     <string name="split_keyboard_enabled">자동 분할 키보드</string>
     <string name="split_keyboard_threshold">분할 키보드 임계값</string>

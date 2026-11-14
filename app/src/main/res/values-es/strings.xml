@@ -655,6 +655,9 @@
     <string name="space_behavior_voice_input_hold">Voice input (hold to talk)</string>
     <string name="space_long_press_behavior">Comportamiento de pulsacion larga de la barra espaciadora</string>
     <string name="space_swipe_move_cursor">Deslizar en la barra espaciadora para mover el cursor</string>
+    <string name="space_swipe_behavior">Acción al deslizar la barra espaciadora</string>
+    <string name="space_swipe_behavior_japanese_toggle">Cambiar a japonés / volver al idioma anterior</string>
+    <string name="space_swipe_behavior_disabled">Desactivar deslizamiento</string>
     <string name="split_keyboard_calibration_title">Calibracion de teclado dividido</string>
     <string name="split_keyboard_enabled">Teclado dividido automático</string>
     <string name="split_keyboard_threshold">Umbral de teclado dividido</string>

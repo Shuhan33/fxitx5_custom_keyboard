@@ -126,6 +126,8 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private var jobs = Channel<Job>(capacity = Channel.UNLIMITED)
     private var inputBindingGeneration = 0
     private var inputSessionGeneration = 0
+    internal val inputSessionGenerationSnapshot: Int
+        get() = inputSessionGeneration
     private var pendingCandidatePagingMode: Int? = null
     private var appliedCandidatePagingMode: Int? = null
     private var candidatePagingModeJob: Job? = null
@@ -2076,7 +2078,7 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         decorLocationUpdated = false
         inputView?.cancelOngoingKeyActions()
         // Commit a pending Japanese composition while the old input connection is still valid
-        // and leave Japanese mode, so the next shown keyboard starts from Chinese.
+        // and leave Japanese mode, keeping the fcitx input method that remained underneath.
         localComposer?.finishSession()
         InputStatsManager.flush()
         inputDeviceManager.onFinishInputView()

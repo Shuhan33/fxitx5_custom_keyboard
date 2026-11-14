@@ -89,6 +89,9 @@ sealed class KeyAction {
 
     data object LangSwitchAction : KeyAction()
 
+    /** Toggle the temporary Japanese keyboard without advancing the fcitx IME underneath. */
+    data object JapaneseSpaceSwipeAction : KeyAction()
+
     data object ToggleEnglishSpellAction : KeyAction()
 
     /** Clear the current preedit/candidate composition without committing it. */

@@ -21,6 +21,7 @@ import org.fcitx.fcitx5.android.input.keyboard.KeyboardHeightPercentBase
 import org.fcitx.fcitx5.android.input.keyboard.LangSwitchBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SpaceKeyLabelMode
 import org.fcitx.fcitx5.android.input.keyboard.SpaceLongPressBehavior
+import org.fcitx.fcitx5.android.input.keyboard.SpaceSwipeBehavior
 import org.fcitx.fcitx5.android.input.keyboard.SwipeSymbolDirection
 import org.fcitx.fcitx5.android.input.picker.PickerWindow
 import org.fcitx.fcitx5.android.input.popup.EmojiModifier
@@ -254,8 +255,11 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "space_key_label_mode",
             SpaceKeyLabelMode.Default
         )
-        val spaceSwipeMoveCursor =
-            switch(R.string.space_swipe_move_cursor, "space_swipe_move_cursor", true)
+        val spaceSwipeBehavior = enumList(
+            R.string.space_swipe_behavior,
+            "space_swipe_behavior",
+            SpaceSwipeBehavior.JapaneseToggle
+        )
         val showLangSwitchKey =
             switch(R.string.show_lang_switch_key, "show_lang_switch_key", true)
         val englishSpellCandidates = switch(
@@ -263,12 +267,6 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             "english_spell_candidates",
             true,
             R.string.english_spell_candidates_summary
-        )
-        val japaneseKeyboardInCycle = switch(
-            R.string.japanese_keyboard_in_cycle,
-            "japanese_keyboard_in_cycle",
-            true,
-            R.string.japanese_keyboard_in_cycle_summary
         )
         val textKeyboardLayoutProfile = ManagedPreference.PString(
             sharedPreferences,

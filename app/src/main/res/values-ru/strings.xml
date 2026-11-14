@@ -291,6 +291,9 @@
     <string name="open_rime_user_data_dir">Будет открыт каталог данных приложения. Каталог пользовательских данных RIME находится в "data" и зависит от текущего выбранного каталога.</string>
     <string name="generic_multiselect_min">Необходимо выбрать как минимум %1$d элемент(а).</string>
     <string name="space_swipe_move_cursor">Провести по клавише пробела, чтобы переместить курсор</string>
+    <string name="space_swipe_behavior">Действие при смахивании по пробелу</string>
+    <string name="space_swipe_behavior_japanese_toggle">Переключить на японский / вернуть предыдущий язык</string>
+    <string name="space_swipe_behavior_disabled">Отключить смахивание</string>
     <string name="please_wait">Пожалуйста, подождите…</string>
     <string name="rotate">Повернуть</string>
     <string name="flip">Перевернуть</string>

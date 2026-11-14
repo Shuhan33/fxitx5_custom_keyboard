@@ -35,7 +35,8 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         val countX: Int,
         val countY: Int,
         val totalX: Int,
-        val totalY: Int
+        val totalY: Int,
+        val cancelled: Boolean = false
     )
 
     fun interface OnGestureListener {
@@ -68,8 +69,13 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
 
     var swipeEnabled = false
     var swipeRepeatEnabled = false
+    /** Cancel swipe recognition for this key when another pointer also touches it. */
+    var cancelSwipeOnAdditionalPointer = false
     var swipeThresholdX = 24f
     var swipeThresholdY = 24f
+    private var activeSwipeEnabled = false
+    private var activeSwipeThresholdX = swipeThresholdX
+    private var activeSwipeThresholdY = swipeThresholdY
 
     private var swipeRepeatTriggered = false
     private var swipeLastX = -1f
@@ -79,6 +85,7 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
     private var swipeTotalX = 0
     private var swipeTotalY = 0
     private var gestureConsumed = false
+    private var additionalPointerSeen = false
 
     var doubleTapEnabled = false
     private var lastClickTime = 0L
@@ -140,22 +147,22 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
             repeatJob?.cancel()
             repeatJob = null
         }
-        if (swipeEnabled) {
-            if (swipeRepeatEnabled) {
-                swipeRepeatTriggered = false
-            }
-            swipeXUnconsumed = 0f
-            swipeYUnconsumed = 0f
-            swipeTotalX = 0
-            swipeTotalY = 0
-            gestureConsumed = false
+        if (swipeRepeatEnabled) {
+            swipeRepeatTriggered = false
         }
+        swipeXUnconsumed = 0f
+        swipeYUnconsumed = 0f
+        swipeTotalX = 0
+        swipeTotalY = 0
+        gestureConsumed = false
+        activeSwipeEnabled = false
         // double tap state should be preserved on touch up
     }
 
     fun cancelGestures() {
         isPressed = false
         resetState()
+        additionalPointerSeen = false
         // reset double tap state on cancel
         if (doubleTapEnabled) {
             maybeDoubleTap = false
@@ -170,6 +177,10 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isEnabled) return false
+                additionalPointerSeen = false
+                activeSwipeEnabled = swipeEnabled
+                activeSwipeThresholdX = swipeThresholdX
+                activeSwipeThresholdY = swipeThresholdY
                 val longPressDelayMillis = maxOf(
                     longPressDelay.toLong(),
                     holdDelayOverrideMillis ?: 0L
@@ -210,13 +221,19 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
             MotionEvent.ACTION_UP -> {
                 isPressed = false
                 InputFeedbacks.hapticFeedback(this, longPress = true, keyUp = true)
-                dispatchGestureEvent(GestureType.Up, event.x, event.y)
+                dispatchGestureEvent(
+                    GestureType.Up,
+                    event.x,
+                    event.y,
+                    cancelled = additionalPointerSeen
+                )
                 val shouldPerformClick = !(touchMovedOutside ||
                         longPressTriggered ||
                         repeatStarted ||
                         swipeRepeatTriggered ||
                         gestureConsumed)
                 resetState()
+                additionalPointerSeen = false
                 if (shouldPerformClick) {
                     if (doubleTapEnabled) {
                         val now = System.currentTimeMillis()
@@ -247,11 +264,11 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
                         repeatJob?.cancel()
                         repeatJob = null
                     }
-                    if (repeatStarted || !swipeEnabled) {
+                    if (repeatStarted || !activeSwipeEnabled) {
                         isPressed = false
                     }
                 }
-                if (!swipeEnabled || longPressTriggered || repeatStarted) return true
+                if (!activeSwipeEnabled || longPressTriggered || repeatStarted) return true
                 val countX = consumeSwipe(x, SwipeAxis.X)
                 val countY = consumeSwipe(y, SwipeAxis.Y)
                 dispatchGestureEvent(GestureType.Move, x, y, countX, countY)
@@ -259,8 +276,16 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
                 swipeLastY = y
                 return true
             }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (cancelSwipeOnAdditionalPointer) {
+                    additionalPointerSeen = true
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_UP -> return true
             MotionEvent.ACTION_CANCEL -> {
-                dispatchGestureEvent(GestureType.Up, event.x, event.y)
+                additionalPointerSeen = false
+                dispatchGestureEvent(GestureType.Up, event.x, event.y, cancelled = true)
                 cancelGestures()
                 return true
             }
@@ -273,9 +298,12 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         x: Float,
         y: Float,
         countX: Int = 0,
-        countY: Int = 0
+        countY: Int = 0,
+        cancelled: Boolean = false
     ) {
-        val event = Event(type, gestureConsumed, x, y, countX, countY, swipeTotalX, swipeTotalY)
+        val event = Event(
+            type, gestureConsumed, x, y, countX, countY, swipeTotalX, swipeTotalY, cancelled
+        )
         val consumed = onGestureListener?.onGesture(this, event) ?: return
         if (consumed && !gestureConsumed) {
             gestureConsumed = true
@@ -288,11 +316,11 @@ open class CustomGestureView(ctx: Context) : FrameLayout(ctx) {
         when (axis) {
             SwipeAxis.X -> {
                 unconsumed = current - swipeLastX + swipeXUnconsumed
-                threshold = swipeThresholdX
+                threshold = activeSwipeThresholdX
             }
             SwipeAxis.Y -> {
                 unconsumed = current - swipeLastY + swipeYUnconsumed
-                threshold = swipeThresholdY
+                threshold = activeSwipeThresholdY
             }
         }
         val remains: Float = unconsumed % threshold
