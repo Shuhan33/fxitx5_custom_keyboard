@@ -51,6 +51,18 @@ class PickerWindow(
 
     private val keyBorder by ThemeManager.prefs.keyBorder
 
+    private fun dispatchPickedText(text: String, source: KeyActionListener.Source) {
+        val action = if (commonKeyActionListener.shouldUseComposeLiteralForPickerSymbol(
+                symbolPicker = key == Key.Symbol
+            )
+        ) {
+            KeyAction.ComposeLiteralAction(text)
+        } else {
+            KeyAction.CommitAction(text)
+        }
+        commonKeyActionListener.listener.onKeyAction(action, source)
+    }
+
     private lateinit var pickerLayout: PickerLayout
     private lateinit var pickerPagesAdapter: PickerPagesAdapter
 
@@ -80,14 +92,16 @@ class PickerWindow(
             }
 
             is KeyAction.FcitxKeyAction -> {
-                commonKeyActionListener.listener.onKeyAction(KeyAction.CommitAction(it.act), source)
+                dispatchPickedText(it.act, source)
             }
 
             else -> {
                 if (it is KeyAction.CommitAction) {
                     pickerPagesAdapter.insertRecent(it.text)
+                    dispatchPickedText(it.text, source)
+                } else {
+                    commonKeyActionListener.listener.onKeyAction(it, source)
                 }
-                commonKeyActionListener.listener.onKeyAction(it, source)
             }
         }
     }

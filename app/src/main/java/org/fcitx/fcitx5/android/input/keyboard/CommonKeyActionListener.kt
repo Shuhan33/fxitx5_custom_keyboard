@@ -80,6 +80,18 @@ class CommonKeyActionListener :
     private var voiceHoldActive = false
     private var backspaceHoldJob: Job? = null
 
+    /**
+     * Symbol picker selections should share the swipe-symbol behavior during an active Chinese
+     * composition, while preserving normal commit behavior in all other states.
+     */
+    fun shouldUseComposeLiteralForPickerSymbol(symbolPicker: Boolean): Boolean =
+        shouldComposePickerSymbol(
+            symbolPicker = symbolPicker,
+            chineseInputMethod = fcitx.inputMethodEntryCached.languageCode.startsWith("zh"),
+            preeditActive = !preeditState.isEmpty,
+            japaneseModeActive = japaneseInput.isActive
+        )
+
     // there should be a new fcitx API for this
     private suspend fun FcitxAPI.commitAndReset(includePredictionCandidates: Boolean = true) {
         if (inputMethodEntryCached.languageCode.startsWith("zh")) {
