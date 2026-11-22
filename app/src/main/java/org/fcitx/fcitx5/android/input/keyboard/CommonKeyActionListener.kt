@@ -87,7 +87,9 @@ class CommonKeyActionListener :
     fun shouldUseComposeLiteralForPickerSymbol(symbolPicker: Boolean): Boolean =
         shouldComposePickerSymbol(
             symbolPicker = symbolPicker,
-            chineseInputMethod = fcitx.inputMethodEntryCached.languageCode.startsWith("zh"),
+            chineseInputMethod = fcitx.runImmediately {
+                inputMethodEntryCached.languageCode.startsWith("zh")
+            },
             preeditActive = !preeditState.isEmpty,
             japaneseModeActive = japaneseInput.isActive
         )
